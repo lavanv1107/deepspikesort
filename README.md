@@ -1,1 +1,1 @@
-# spike_sorting_project
+# Deep Spike Sorting Pipeline
