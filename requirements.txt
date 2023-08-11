@@ -1,4 +1,5 @@
 spikeinterface[full,widgets]
+numba
 matplotlib
 numpy
 pandas
