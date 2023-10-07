@@ -1,10 +1,12 @@
 spikeinterface[full,widgets]
-numba
 matplotlib
 numpy
 pandas
+psutil
+tqdm
 torch
+scikit-learn
 torchinfo
 torchvision
-scikit-learn
 seaborn
+numba
