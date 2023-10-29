@@ -12,4 +12,4 @@ DeepCluster is an unsupervised learning algorithm developed by Facebook AI resea
 - Use the cluster assignments as pseudo-labels and update the neural network weights through backpropagation.
 
 ## Objective
-The objective of this project is to develop and evaluate components of an automated, end-to-end, machine-learning-based spike sorting pipeline follwing the DeepCluster framework with the potential to evolve into a valuable resource for the broader neuroscience community.
+The objective of this project is to develop and evaluate components of an automated, end-to-end, machine-learning-based spike sorting pipeline following the DeepCluster framework with the potential to evolve into a valuable resource for the broader neuroscience community.
