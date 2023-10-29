@@ -1,12 +1,8 @@
 spikeinterface[full,widgets]
-matplotlib
-numpy
-pandas
 psutil
-tqdm
-torch
 scikit-learn
+torch
 torchinfo
 torchvision
 seaborn
-numba
+pycave
