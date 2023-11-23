@@ -1,203 +1,317 @@
 import os
-import psutil
+import glob
 
 import numpy as np
-import multiprocessing as mp
-from tqdm.notebook import tqdm
 
 import torch
 from torch.utils.data import Dataset
 import random
 
-import preprocessing
 
-
-def display_resources():
-    nthreads = psutil.cpu_count(logical=True)
-    ncores = psutil.cpu_count(logical=False)
-    nthreads_per_core = nthreads // ncores
-    nthreads_available = len(os.sched_getaffinity(0))
-    ncores_available = nthreads_available // nthreads_per_core
-
-    assert nthreads == os.cpu_count()
-    assert nthreads == mp.cpu_count()
-
-    print(f'{nthreads=}')
-    print(f'{ncores=}')
-    print(f'{nthreads_per_core=}')
-    print(f'{nthreads_available=}')
-    print(f'{ncores_available=}')
-
-
-def process_trace(recording, folder, frame):
+class SupervisedDataset(Dataset):
     """
-    Creates a trace of a specified frame and saves it to disk.
- 
-    Args:
-        recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
-        folder (str): A folder path name.
-        frame (int): A frame number.
-    """
-    trace_reshaped = get_trace_reshaped(recording, frame)
-    trace_file = f"frame_{frame}.npy"
-    np.save(os.path.join(folder, trace_file), trace_reshaped)
-
-
-def process_unit(table, folder, unit_id, num_processes=128, batch_size=1000, all_frames=False, num_frames=0):
-    """
-    This creates traces for a specified unit's frames and saves them to disk.
-    It creates a folder with a unit's id number. Traces will be created for all frames belonging to that unit and saved to the folder path.
+    A custom PyTorch Dataset class for loading and processing image data. It converts 
+    images from the dataset into tensors and attaches corresponding labels to them.
     
-    In order to speed up this I/O process, we can utilize multiprocessing as well as batches. 
-    The number of processes can be set according to the number of cores available. 
-    The batch size can be set according to how much memory is available.
-    
-    You can either use all frames belonging to a unit or you can set the number of frames to be used.
- 
-    Args:
-        table (obj): A table containing entries with a unit id and frame.
-        folder (str): A folder path name.
-        unit_id (int): A spike unit's ID number.
-        num_processes (int): number of processes for multiprocessing.
-        batch_size (int): number of traces to process per batch.
-        all_frames (bool): condition to use all frames belonging to a unit.
-        num_frames (int): number of frames to use for a unit.
-    """
-    with mp.Pool(processes=num_processes) as pool:
-        unit_folder = os.path.join(folder, f'unit_{unit_id}')
-        if not os.path.exists(unit_folder):
-            os.mkdir(unit_folder)
-
-        unit_table = get_spike_unit(table, unit_id)
-        unit_frames = unit_table.iloc[:, 1].to_list()
-
-        if all_frames:
-            num_frames = len(unit_table)
-
-        for i in range(0, num_frames, batch_size):
-            frames_batch = unit_frames[i:i+batch_size]
-            folder_frames_batch = [(unit_folder, frame) for frame in frames_batch]
-            pool.starmap(process_trace, tqdm(folder_frames_batch,
-                                             total=len(folder_frames_batch),
-                                             desc='processing batch',
-                                             dynamic_ncols=True))
-
-
-class TensorDataset(Dataset):
-    """
-    A custom PyTorch Dataset class which converts trace images in the image dataset into tensors and attaches labels to them.
- 
     Attributes:
-        Dataset (class): PyTorch's Dataset class.
+        dataset_folder (str): Path to the dataset folder.
+        unit_ids (list): List of unit IDs corresponding to folder names.
+        shuffle (bool): Flag to shuffle the dataset.
+        seed (int): Seed for reproducibility if shuffle is True.
+        image_paths (list): List of paths to the images in the dataset.
+        shuffled_indices (list): List of shuffled indices if shuffle is True.
     """
-    def __init__(self, dataset_folder, folder_labels):
+
+    def __init__(self, dataset_folder, unit_ids, shuffle=False, seed=None):
         """
+        Initializes the SupervisedDataset instance.
+
         Args:
             dataset_folder (str): The folder path name of the image dataset.
-            folder_labels (list): A list containing folder names of image dataset.
+            unit_ids (list): A list containing unit IDs corresponding to folder names in the image dataset.
+            shuffle (bool, optional): Whether to shuffle the dataset. Defaults to False.
+            seed (int, optional): Random seed for shuffling. Defaults to None.
         """
         self.dataset_folder = dataset_folder
-        self.folder_labels = folder_labels
+        self.unit_ids = unit_ids
+        self.shuffle = shuffle
+        self.seed = seed
         self.image_paths = self.get_image_paths()
-        random.shuffle(self.image_paths)
+        if self.shuffle:
+            self.shuffled_indices = self.shuffle_indices()
+            self.image_paths = self.get_shuffled_image_paths()
 
     def get_image_paths(self):
         """
-        Creates a list of path names of all images in the image dataset.
+        Generates a list of image paths from the dataset.
 
         Returns:
-            obj: A list of image path names.
+            list: A list containing paths to all images in the dataset.
         """
-        image_paths = []
-        # Iterate over the subfolders
-        folder_labels = [str(x) for x in self.folder_labels]
-        for folder in folder_labels:
-            folder_path = os.path.join(self.dataset_folder, folder)
-            folder_files = [file for file in os.listdir(folder_path) if file.endswith('.npy')]
-            image_paths.extend([os.path.join(folder_path, file) for file in folder_files])
+        image_paths = [path for folder in self.unit_ids 
+                       for path in glob.glob(os.path.join(self.dataset_folder, str(folder), '*.npy'))]
         return image_paths
+    
+    def shuffle_indices(self):
+        """
+        Shuffles the indices of the dataset, using a set seed for reproducibility.
+
+        Returns:
+            list: A list of shuffled indices.
+        """
+        if self.seed is not None:
+            random.seed(self.seed)
+        indices = list(range(len(self.image_paths)))
+        random.shuffle(indices)
+        return indices
+    
+    def get_shuffled_image_paths(self):
+        """
+        Retrieves the list of image paths in the order they were shuffled.
+
+        Returns:
+            list: The shuffled image paths.
+        """
+        return [self.image_paths[i] for i in self.shuffled_indices]
+    
+    def get_image(self, idx):
+        """
+        Loads and returns an image as a tensor at a specified index.
+
+        Args:
+            idx (int): The index of the image to retrieve.
+
+        Returns:
+            torch.Tensor: The image converted to a tensor.
+        """
+        image = torch.from_numpy(np.load(self.image_paths[idx])).unsqueeze(0).float()
+        return image
     
     def get_label(self, idx):
         """
-        Retrieves the folder name corresponding to the image at a given index.
+        Retrieves the label (unit ID) corresponding to the image at the specified index.
 
         Args:
-            idx (int): Index number of image in the image dataset.
+            idx (int): The index of the image.
 
         Returns:
-            folder_name (str): The folder name of the image.
+            int: The label (unit ID) of the image.
         """
-        label = os.path.dirname(self.image_paths[idx]).split(os.sep)[-1]
-        label = int(label)
+        label = int(os.path.dirname(self.image_paths[idx]).split(os.sep)[-1])
         return label
     
-    def get_image(self, idx):
-        image = torch.from_numpy(np.load(self.image_paths[idx])).unsqueeze(0).float()
-        return image
-
-    def __len__(self):
+    def get_labels(self):
         """
-        Checks the number of images in the image dataset.
+        Retrieves labels for all images in the dataset.
 
         Returns:
-            int: The size of the image dataset.
+            list: A list of labels corresponding to each image in the dataset.
+        """
+        labels = [int(os.path.dirname(path).split(os.sep)[-1]) for path in self.image_paths]
+        return labels
+    
+    def __len__(self):
+        """
+        Returns the number of images in the dataset.
+
+        Returns:
+            int: The total number of images in the dataset.
         """
         return len(self.image_paths)
 
     def __getitem__(self, idx):
         """
-        Retrieves an image from the dataset, converts it into a tensor and attaches a label to it from labels_map which it belongs to.
+        Retrieves an image and its label from the dataset.
 
         Args:
-            int: Index number of image in the image dataset.
+            idx (int): The index of the image and label pair.
 
         Returns:
-            image (obj): The size of the image dataset.
-            label (int): The label of the image.
+            tuple: A tuple containing the image tensor and its label.
         """
-        # Load the numpy file as a grayscale image tensor
         image = self.get_image(idx)
-        # Extract the label from the folder name
         label = self.get_label(idx)
         return image, label
 
     
-class ClusteredDataset(Dataset):
-    def __init__(self, dataset_folder, folder_labels, folder_to_cluster_map):
+class UnsupervisedDataset(Dataset):
+    """
+    A custom PyTorch Dataset class for loading and processing image data. It converts 
+    images from the dataset into tensors.
+
+    Attributes:
+        dataset_folder (str): Path to the dataset folder.
+        unit_ids (list): List of unit IDs corresponding to folder names.
+        shuffle (bool): Flag to shuffle the dataset.
+        seed (int): Seed for reproducibility if shuffle is True.
+        image_paths (list): List of paths to the images in the dataset.
+        shuffled_indices (list): List of shuffled indices if shuffle is True.
+    """
+
+    def __init__(self, dataset_folder, unit_ids, shuffle=False, seed=None):
+        """
+        Initializes the UnsupervisedDataset instance.
+
+        Args:
+            dataset_folder (str): The folder path name of the image dataset.
+            unit_ids (list): A list containing unit IDs corresponding to folder names in the image dataset.
+            shuffle (bool, optional): Whether to shuffle the dataset. Defaults to False.
+            seed (int, optional): Random seed for shuffling. Defaults to None.
+        """
         self.dataset_folder = dataset_folder
-        self.folder_labels = folder_labels
-        self.folder_to_cluster_map = folder_to_cluster_map  # The mapping from folder to cluster
+        self.unit_ids = unit_ids
+        self.shuffle = shuffle
+        self.seed = seed
         self.image_paths = self.get_image_paths()
-        random.shuffle(self.image_paths)
+        if self.shuffle:
+            self.shuffled_indices = self.shuffle_indices()
+            self.image_paths = self.get_shuffled_image_paths()
 
     def get_image_paths(self):
-        image_paths = []
-        for folder in self.folder_labels:
-            folder_path = os.path.join(self.dataset_folder, str(folder))
-            folder_files = [file for file in os.listdir(folder_path) if file.endswith('.npy')]
-            image_paths.extend([os.path.join(folder_path, file) for file in folder_files])
+        """
+        Generates a list of image paths from the dataset.
+
+        Returns:
+            list: A list containing paths to all images in the dataset.
+        """
+        image_paths = [path for folder in self.unit_ids 
+                       for path in glob.glob(os.path.join(self.dataset_folder, str(folder), '*.npy'))]
         return image_paths
     
-    def get_label(self, idx):
-        folder_name = os.path.dirname(self.image_paths[idx]).split(os.sep)[-1]
-        folder_name = int(folder_name)
-        
-        # Use the mapping to fetch the cluster assignment instead of folder_name
-        label = self.folder_to_cluster_map.get(folder_name, folder_name)
-        
-        return label
+    def shuffle_indices(self):
+        """
+        Shuffles the indices of the dataset, using a set seed for reproducibility.
+
+        Returns:
+            list: A list of shuffled indices.
+        """
+        if self.seed is not None:
+            random.seed(self.seed)
+        indices = list(range(len(self.image_paths)))
+        random.shuffle(indices)
+        return indices
+    
+    def get_shuffled_image_paths(self):
+        """
+        Retrieves the list of image paths in the order they were shuffled.
+
+        Returns:
+            list: The shuffled image paths.
+        """
+        return [self.image_paths[i] for i in self.shuffled_indices]
     
     def get_image(self, idx):
+        """
+        Loads and returns an image as a tensor at a specified index.
+
+        Args:
+            idx (int): The index of the image to retrieve.
+
+        Returns:
+            torch.Tensor: The image converted to a tensor.
+        """
         image = torch.from_numpy(np.load(self.image_paths[idx])).unsqueeze(0).float()
         return image
+    
+    def get_labels(self):
+        """
+        Retrieves labels for all images in the dataset.
+
+        Returns:
+            list: A list of labels corresponding to each image in the dataset.
+        """
+        labels = [int(os.path.dirname(path).split(os.sep)[-1]) for path in self.image_paths]
+        return labels
 
     def __len__(self):
+        """
+        Returns the number of images in the dataset.
+
+        Returns:
+            int: The total number of images in the dataset.
+        """
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        # Load the numpy file as a grayscale image tensor
+        """
+        Retrieves an image from the dataset and converts it into a tensor.
+
+        Args:
+            idx (int): The index of the image.
+
+        Returns:
+            torch.Tensor: The image at the specified index, converted to a tensor.
+        """
         image = self.get_image(idx)
-        # Extract the label from the folder name
+        return image
+    
+    
+class ClusteredDataset(Dataset):
+    """
+    A custom PyTorch Dataset class for datasets where each image is assigned
+    a cluster label instead of a traditional class label.
+
+    Attributes:
+        image_paths (list): List of paths to the images in the dataset.
+        cluster_labels (list): List of cluster labels corresponding to each image.
+    """
+
+    def __init__(self, image_paths, cluster_labels):
+        """
+        Initializes the ClusteredDataset instance.
+
+        Args:
+            image_paths (list): A list containing paths to all images in the dataset.
+            cluster_labels (list): A list containing cluster labels for each image in the dataset.
+        """
+        self.image_paths = image_paths
+        self.cluster_labels = cluster_labels
+    
+    def get_image(self, idx):
+        """
+        Loads and returns an image as a tensor at a specified index.
+
+        Args:
+            idx (int): The index of the image to retrieve.
+
+        Returns:
+            torch.Tensor: The image converted to a tensor.
+        """
+        image = torch.from_numpy(np.load(self.image_paths[idx])).unsqueeze(0).float()
+        return image
+    
+    def get_label(self, idx):
+        """
+        Retrieves the cluster label of an image at a specified index.
+
+        Args:
+            idx (int): The index of the image.
+
+        Returns:
+            int: The cluster label of the image.
+        """
+        label = self.cluster_labels[idx]
+        return label
+
+    def __len__(self):
+        """
+        Returns the number of images (and labels) in the dataset.
+
+        Returns:
+            int: The total number of images in the dataset.
+        """
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        """
+        Retrieves an image and its corresponding cluster label from the dataset.
+
+        Args:
+            idx (int): The index of the image.
+
+        Returns:
+            tuple: A tuple containing the image tensor and its cluster label.
+        """
+        image = self.get_image(idx)
         label = self.get_label(idx)
-        
         return image, label
