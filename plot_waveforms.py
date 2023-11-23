@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import numpy as np
+import random
 import preprocessing
 
 
@@ -14,7 +16,7 @@ def plot_trace_waveform(recording, frame, channel):
     Returns:
         obj: A 2D plot of a waveform.
     """
-    trace_snippet = get_trace_snippet(recording, frame)
+    trace_snippet = preprocessing.get_trace_snippet(recording, frame)
     
     plt.figure()
 
@@ -34,7 +36,7 @@ def plot_trace_image(recording, frame):
     Yields:
         obj: A 3D image of waveforms.
     """
-    trace_reshaped = get_trace_reshaped(recording, frame)
+    trace_reshaped = preprocessing.get_trace_reshaped(recording, frame)
     trace_transposed = np.transpose(trace_reshaped, (1, 0, 2))
 
     vmin = trace_transposed.min()
@@ -54,7 +56,7 @@ def plot_trace_image(recording, frame):
     plt.show()
     
     
-def plot_unit_waveform(recording, spikes_table, unit_id, all_waveforms=False, num_waveforms=10):
+def plot_unit_waveform(recording, spikes_table, unit_id, all_waveforms=False, num_waveforms=10, seed=None):
     """
     Plots waveforms for a specific spike unit at its extremum channel.
  
@@ -68,7 +70,7 @@ def plot_unit_waveform(recording, spikes_table, unit_id, all_waveforms=False, nu
     Returns:
         obj: A 2D plot of waveforms.
     """
-    peak_frames, peak_channel = get_unit_frames_and_channel(spikes_table, unit_id)
+    peak_frames, peak_channel = preprocessing.get_unit_frames_and_channel(spikes_table, unit_id)
 
     if all_waveforms:
         peak_frames_to_plot = peak_frames
@@ -77,12 +79,14 @@ def plot_unit_waveform(recording, spikes_table, unit_id, all_waveforms=False, nu
         if len(peak_frames) < num_waveforms:
             peak_frames_to_plot = peak_frames
         else:
+            if seed is not None:
+                random.seed(seed)
             peak_frames_to_plot = random.sample(peak_frames, num_waveforms)
             
     plt.figure()
     
     for peak_frame in peak_frames_to_plot:
-        trace_snippet = get_trace_snippet(recording, peak_frame)
+        trace_snippet = preprocessing.get_trace_snippet(recording, peak_frame)
         plt.plot(trace_snippet[:, peak_channel])
 
     plt.xlabel('time (frames)')
@@ -93,7 +97,7 @@ def plot_unit_waveform(recording, spikes_table, unit_id, all_waveforms=False, nu
     
 def plot_peak_waveform(recording, peaks_noise_table, start_idx, end_idx):
     """
-    Plots waveforms for peaks which are noise within a specified range.
+    Plots waveforms for peaks within a specified range.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
