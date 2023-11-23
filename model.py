@@ -14,7 +14,7 @@ class DeepCluster(nn.Module):
         self.flatten = nn.Flatten()
         
         # Classifier layers
-        self.fully_connected_layer_1 = nn.Linear(35328, 500)
+        self.fully_connected_layer_1 = nn.Linear(35328, 500) # figure out a suitable number of features
         self.fully_connected_layer_2 = nn.Linear(500, num_classes)
         
         # Initialize weights
@@ -35,7 +35,7 @@ class DeepCluster(nn.Module):
         x = inputs_dict['x']
         feature_extraction = inputs_dict.get('feature_extraction', False)
         
-        # Extractor part
+        # Extractor 
         x = F.relu(F.max_pool2d(torch.squeeze(self.conv_layer_1(x), 4), 2))
         x = F.relu(F.max_pool2d(self.conv_layer_2_drop(self.conv_layer_2(x)), 2))
         
@@ -46,7 +46,7 @@ class DeepCluster(nn.Module):
         if feature_extraction:
             return x  # Returning here before dropout and the second fully connected layer
         
-        # Classifier part
+        # Classifier
         x = F.dropout(x, training=self.training)
         x = self.fully_connected_layer_2(x)
         
