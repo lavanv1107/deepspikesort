@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from numba import jit
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 
 def save_peaks(peaks, folder):
@@ -18,6 +18,7 @@ def save_peaks(peaks, folder):
     os.mkdir(folder)
     np.save(os.path.join(folder, 'peaks.npy'), peaks)
 
+    
 def load_peaks(folder):
     """
     Loads peaks object from specified folder path in disk.
@@ -29,6 +30,7 @@ def load_peaks(folder):
         obj: A peaks object loaded from disk. 
     """
     return np.load(os.path.join(folder, 'peaks.npy'))
+
 
 def extract_peaks(recording, peaks):
     """
@@ -44,8 +46,8 @@ def extract_peaks(recording, peaks):
     """
     peaks_table = pd.DataFrame(peaks)
     
-    peaks_table.rename(columns={'sample_ind': 'peak_frame', 'channel_ind':'peak_channel'}, inplace=True)
-    peaks_table.drop(columns=['amplitude','segment_ind'], inplace=True)
+    peaks_table.rename(columns={'sample_index': 'peak_frame', 'channel_index':'peak_channel'}, inplace=True)
+    peaks_table.drop(columns=['amplitude','segment_index'], inplace=True)
 
     # Create a boolean mask to identify rows within the specified range
     mask = (peaks_table['peak_frame'] >= 31) & (peaks_table['peak_frame'] <= recording.get_num_frames() - 33)
@@ -54,6 +56,7 @@ def extract_peaks(recording, peaks):
     peaks_table = peaks_table.reset_index(drop=True)
     
     return peaks_table
+    
     
 @jit
 def match_peaks(peaks_table, spikes_table, channels_table):
@@ -125,6 +128,7 @@ def match_peaks(peaks_table, spikes_table, channels_table):
 
     return peaks_matched_table
     
+    
 def get_peaks_spikes(peaks_matched_table):
     """
     Creates a table of only spike matched peaks with unit ids.
@@ -139,6 +143,7 @@ def get_peaks_spikes(peaks_matched_table):
     peaks_spikes_table.reset_index(drop=True, inplace=True)
     
     return peaks_spikes_table
+
 
 def get_peaks_noise(peaks_matched_table):
     """

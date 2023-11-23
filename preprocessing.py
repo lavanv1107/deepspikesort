@@ -60,8 +60,8 @@ def extract_spikes(sorting, waveform):
     Returns:
         obj: A table of spike events.
     """
-    spikes_table = pd.DataFrame({'unit_id': sorting.get_all_spike_trains()[0][1],
-                                     'peak_frame': sorting.get_all_spike_trains()[0][0]})
+    spikes_table = pd.DataFrame({'unit_id': sorting.to_spike_vector()['unit_index'],
+                                     'peak_frame': sorting.to_spike_vector()['sample_index']})
 
     spikes_table['unit_id'] = spikes_table['unit_id'].astype(int)
 
