@@ -3,7 +3,8 @@ import os
 import torch
 import torch.nn as nn
 
-from tqdm.notebook import tqdm
+import time
+from tqdm import tqdm
 
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix
@@ -11,19 +12,26 @@ from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from util import AverageMeter 
+
 
 class TrainModel():
     """
-    A PyTorch-based class for training and validating a model.
+    A PyTorch-based class for training and validating a neural network model. 
+    It utilizes DataParallel for training on multiple GPUs.
     """
-    def __init__(self, train_dataloader, test_dataloader, device, device_ids, loss_fn, optimizer):
+
+    def __init__(self, device, device_ids, loss_fn, optimizer, train_dataloader=None, test_dataloader=None):
         """
+        Initializes the training and testing setup.
+
         Args:
-            train_dataloader (obj): The dataloader object for the training set.
-            test_dataloader (obj): The dataloader object for the testing set.
-            device (str): The name of the device to run training/testing.
-            loss_fn (class): A loss function class provided by PyTorch.
-            optimizer (obj): A PyTorch optimizer object created based on the model's parameters.
+            device (str): The device on which to run the model (e.g., 'cuda:0').
+            device_ids (list): List of GPU device IDs to use for DataParallel.
+            loss_fn (torch.nn.modules.loss): The loss function to use for training.
+            optimizer (torch.optim.Optimizer): The optimizer to use for training.
+            train_dataloader (torch.utils.data.DataLoader, optional): DataLoader for the training data.
+            test_dataloader (torch.utils.data.DataLoader, optional): DataLoader for the testing data.
         """
         self.train_dataloader = train_dataloader
         self.test_dataloader = test_dataloader
@@ -32,29 +40,33 @@ class TrainModel():
         self.loss_fn = loss_fn
         self.optimizer = optimizer
 
-
-    def train(self, model):
+    def train(self, model, epoch, verbose_interval=10):
         """
-        This trains the model and prints the current loss after every batch.
-
         Args:
-            model (obj): A PyTorch model.
-        """
+            model (torch.nn.Module): The PyTorch model to train.
+            epoch (int): The current epoch number.
+            verbose_interval (int, optional): Interval (in number of batches) at which to print detailed training progress. 
+                                               If set to 0 or None, no detailed progress will be printed. Defaults to 5.
+
+        Returns:
+            float: The average loss for an epoch.
+        """    
+        loss_meter = AverageMeter()
+        batch_time_meter = AverageMeter()
+        data_time_meter = AverageMeter()
+        
+        # Start training the model
         model.to(self.device)
         model = nn.DataParallel(model, device_ids=self.device_ids)
-    
-        # Start training the model
         model.train()
 
-        # Get the total number of samples in the training dataset
-        size = len(self.train_dataloader.dataset)
-
         # Iterate through each batch in the training dataloader
+        end = time.time()
         for batch, (X, Y) in enumerate(self.train_dataloader):
+            data_time_meter.update(time.time() - end)
 
             # Move input data and labels to the specified device (e.g., GPU)
-            X = X.to(self.device)
-            Y = Y.to(self.device)
+            X, Y = X.to(self.device), Y.to(self.device)
 
             # Zero out the gradients in the model's parameters
             self.optimizer.zero_grad()
@@ -71,14 +83,21 @@ class TrainModel():
 
             # Update the model's parameters using the optimizer
             self.optimizer.step()
-
-            # Print the loss and progress every 100 batches
-            if batch % 100 == 0:
-                loss_value = loss.item()
-                current = batch * len(X)
-                print(f'loss: {loss_value:>7f}  [{current:>5d}/{size:>5d}]')
-                
-
+            
+            loss_meter.update(loss.item(), X.size(0))
+            batch_time_meter.update(time.time() - end)
+            end = time.time()
+            
+            if verbose_interval and (batch % verbose_interval) == 0:
+                print('- Epoch: [{0}][{1}/{2}]\t'
+                      'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                      'Data: {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                      'Loss: {loss.val:.4f} ({loss.avg:.4f})'
+                      .format(epoch+1, batch, len(self.train_dataloader), batch_time=batch_time_meter,
+                              data_time=data_time_meter, loss=loss_meter))
+            
+        return loss_meter.avg
+        
     def test(self, model):
         """
         This tests/validates the model and prints the model's accuracy and average loss for an epoch.
@@ -94,7 +113,7 @@ class TrainModel():
         """
         # Get the total number of samples in the test dataset
         size = len(self.test_dataloader.dataset)
-
+        
         # Set the model to evaluation mode (no gradient updates during evaluation)        
         model.to(self.device)
         model = nn.DataParallel(model, device_ids=self.device_ids)
@@ -107,11 +126,8 @@ class TrainModel():
         true_labels = []
         predicted_labels = []
 
-        # Initialize the tqdm progress bar
-        progress_bar = tqdm(total=len(self.test_dataloader), desc='Testing', dynamic_ncols=True)
-
         # Disable gradient computation for efficiency during evaluation
-        with torch.no_grad():
+        with torch.no_grad(), tqdm(total=len(self.test_dataloader), desc='Testing', dynamic_ncols=True) as progress_bar:
             # Iterate through each batch in the test dataloader
             for batch, (X, Y) in enumerate(self.test_dataloader):
 
@@ -133,12 +149,9 @@ class TrainModel():
                 predicted_labels.extend(pred.argmax(1).tolist())
 
                 # Update the progress bar
-                progress_bar.update(1)
+                progress_bar.update()
 
-        # Close the progress bar
-        progress_bar.close()
-
-        # Calculate the average test loss and accuracy
+        # Average test loss over the number of batches
         test_loss /= size
         correct /= size
 
@@ -153,7 +166,8 @@ class TrainModel():
         """
         This trains and tests a model.
         It plots and saves loss and accuracy over time as well as a confusion matrix for the model's predictions.
-        There is also a checkpoint saving functionality which allows for pausing the training which saves the model's current state, current epoch and accumulated losses and accuriacies.
+        There is also a checkpoint saving functionality which allows for pausing the training which saves the model's 
+        current state, current epoch and accumulated losses and accuriacies.
 
         Args:
             model (obj): A PyTorch model
@@ -165,7 +179,7 @@ class TrainModel():
         model, start_epoch, losses, accuracies = load_checkpoint(model, model_name, models_folder)
         
         for epoch in range(start_epoch, epochs):
-            print(f'Epoch {epoch+1}\n-------------------------------')
+            # print(f'Epoch {epoch+1}\n-------------------------------')
 
             # Train the model and get the losses for this epoch
             self.train(model)
