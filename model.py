@@ -5,7 +5,7 @@ import math
 
 
 class DeepCluster(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, features_flattened):
         super(DeepCluster, self).__init__()
         # Extractor layers
         self.conv_layer_1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2)) 
@@ -14,7 +14,7 @@ class DeepCluster(nn.Module):
         self.flatten = nn.Flatten()
         
         # Classifier layers
-        self.fully_connected_layer_1 = nn.Linear(35328, 500) # figure out a suitable number of features
+        self.fully_connected_layer_1 = nn.Linear(features_flattened, 500) # figure out a suitable number of features
         self.fully_connected_layer_2 = nn.Linear(500, num_classes)
         
         # Initialize weights
