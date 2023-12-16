@@ -26,103 +26,111 @@ def channel_slice_electricalseriesap(recording):
 
 def extract_channels(recording):
     """
-    Creates a table of channel locations on the probe. 
+    Creates an array of channel locations on the probe. 
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
  
     Returns:
-        obj: A table of channel locations.
+        obj: An array of channel locations.
     """
-    channel_ids = recording.get_channel_ids()
     channel_locations = recording.get_channel_locations()
 
-    channels_array = np.hstack((channel_ids.reshape(-1, 1), channel_locations))
+    # Define the structured data type
+    dtype = [('channel_loc_x', '<f8'), ('channel_loc_y', '<f8')]
 
-    channel_columns = ['channel_id', 'channel_loc_x', 'channel_loc_y']
+    # Create an empty array with the structured dtype
+    channels = np.empty(len(channel_locations), dtype=dtype)
 
-    channels_table = pd.DataFrame(channels_array, columns=channel_columns)
-    channels_table['channel_id'] = channels_table['channel_id'].astype(str)
-    channels_table['channel_loc_x'] = channels_table['channel_loc_x'].astype(float)
-    channels_table['channel_loc_y'] = channels_table['channel_loc_y'].astype(float)
+    # Assign values from the original array to the structured array
+    channels['channel_loc_x'] = channel_locations[:, 0]
+    channels['channel_loc_y'] = channel_locations[:, 1]
 
-    return channels_table
+    return channels
 
 
 def extract_spikes(sorting, waveform):
     """
-    Creates a table of each spike event including the frame and channel at which its peak occurred. 
+    Creates an array of each spike event including the frame and channel at which its peak occurred. 
  
     Args:
         sorting (obj): A SortingExtractor object created from an NWB file using SpikeInterface.
         waveform (obj): A WaveformExtractor object created from a RecordingExtractor and SortingExtractor object.
  
     Returns:
-        obj: A table of spike events.
+        obj: A numpy array of spike events.
     """
-    spikes_table = pd.DataFrame({'unit_id': sorting.to_spike_vector()['unit_index'],
-                                     'peak_frame': sorting.to_spike_vector()['sample_index']})
+    extremum_channels = si.get_template_extremum_channel(waveform, outputs="index")
+    
+    spikes = sorting.to_spike_vector(extremum_channel_inds = extremum_channels)
+    
+    # Columns to keep
+    columns_filtered = ['unit_index', 'sample_index', 'channel_index']
 
-    spikes_table['unit_id'] = spikes_table['unit_id'].astype(int)
+    # Define a new dtype with only the desired columns
+    dtype_filtered = np.dtype([(name, spikes.dtype[name]) for name in columns_filtered])
 
-    # Create a new column and map values from the dictionary based on matching keys
-    spikes_table['peak_channel'] = spikes_table['unit_id'].map(si.get_template_extremum_channel(waveform, outputs="index"))
+    # Create a new array with the new dtype
+    spikes_filtered = np.zeros(spikes.shape, dtype=dtype_filtered)
 
-    return spikes_table
+    # Copy data from the old array to the new array
+    for name in dtype_filtered.names:
+        spikes_filtered[name] = spikes[name]
+
+    return spikes_filtered
 
 
-def get_unit(spikes_table, unit_id):
+def get_unit(spikes, unit_id):
     """
-    Creates a table of spike events for a single unit. 
+    Creates an array of spike events for a single unit. 
  
     Args:
-        spikes_table (obj): A table of spike events.
+        spikes (obj): An array of spike events.
         unit_id (int): ID number of a unit.
  
     Returns:
-        obj: A table of spike events for a single unit.
+        obj: An array of spike events for a single unit.
     """
-    unit_table = spikes_table[spikes_table['unit_id'] == unit_id]
-    unit_table.reset_index(drop=True, inplace=True)
-    return unit_table
+    unit = spikes[spikes['unit_index'] == unit_id]
+    return unit
     
     
-def get_unit_frames_and_channel(spikes_table, unit_id):
+def get_unit_frames_and_channel(spikes, unit_id):
     """
-    Returns all peak frames and peak channel of a single unit.
+    Returns all sample frames and extremum channel of a single unit.
  
     Args:
-        spikes_table (obj): A table of spike events.
+        spikes (obj): An array of spike events.
         unit_id (int): ID number of a unit.
  
     Returns:
-        peak_frames (obj): A list of peak frames for a single unit.
-        peak_channel (int): ID number of peak channel for a single unit.
+        sample_frames (obj): A list of sample frames for a single unit.
+        extremum_channel (int): ID number of extremum channel for a single unit.
     """
-    unit_table = get_unit(spikes_table, unit_id)
-    peak_frames = unit_table['peak_frame'].to_list()
-    peak_channel = unit_table['peak_channel'].unique()[0]
-    return peak_frames, peak_channel
+    unit = get_unit(spikes, unit_id)
+    sample_frames = unit['sample_index'].to_list()
+    extremum_channel = unit['channel_index'].unique()[0]
+    return sample_frames, extremum_channel
 
 
-def get_trace_snippet(recording, peak_frame):
+def get_trace_snippet(recording, sample_frame):
     """
     Spikes generally occur for 2ms (or 64 frames).
     SpikeInterface's get_traces function retrieves a trace of action potentials in all channels within a specficied time frame.
-    This returns a 64 frame trace centered in time on a specified peak frame in order to capture a spike.
+    This returns a 64 frame trace centered in time on a specified sample frame in order to capture a spike.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
-        peak_frame (int): A frame number when a peak occurred.
+        sample_frame (int): A frame number when a sample occurred.
  
     Returns:
         obj: A 2D numpy array (64, 384) of action potentials.
     """
-    trace_snippet = recording.get_traces(start_frame=peak_frame - 31, end_frame=peak_frame + 33)
+    trace_snippet = recording.get_traces(start_frame=sample_frame - 31, end_frame=sample_frame + 33)
     return trace_snippet
 
 
-def get_trace_reshaped(recording, peak_frame):
+def get_trace_reshaped(recording, sample_frame):
     """
     Channels on a Neuropixels probe are arranged in two columns in a checkerboard pattern. 
     There are 4 vertical channel locations - (16,0) in the first column and (48, 32) in the second column. 
@@ -131,12 +139,12 @@ def get_trace_reshaped(recording, peak_frame):
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
-        peak_frame (int): A frame number when a peak occurred.
+        sample_frame (int): A frame number when a sample occurred.
  
     Returns:
         obj: A 3D numpy array (64, 192, 2) of action potentials.
     """
-    trace_snippet = get_trace_snippet(recording, peak_frame)
+    trace_snippet = get_trace_snippet(recording, sample_frame)
     trace_reshaped = np.dstack((
             trace_snippet[:, ::2],
             trace_snippet[:, 1::2]
