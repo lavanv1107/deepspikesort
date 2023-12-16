@@ -1,22 +1,23 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+
 import preprocessing
 
 
-def plot_trace_waveform(recording, frame, channel):
+def plot_trace_waveform(recording, sample_frame, channel):
     """
     Plots a waveform at the specified time frame and channel.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
-        frame (int): A frame number.
+        sample_frame (int): A frame number when a sample occurred.
         channel (int): A channel number.
  
     Returns:
         obj: A 2D plot of a waveform.
     """
-    trace_snippet = preprocessing.get_trace_snippet(recording, frame)
+    trace_snippet = preprocessing.get_trace_snippet(recording, sample_frame)
     
     plt.figure()
 
@@ -25,18 +26,18 @@ def plot_trace_waveform(recording, frame, channel):
     plt.show()
 
     
-def plot_trace_image(recording, frame):
+def plot_trace_image(recording, sample_frame):
     """
     Plots a 3D image of waveforms at the specified time frame and all channels.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
-        frame (int): A frame number.
+        sample_frame (int): A frame number when a sample occurred.
  
     Yields:
         obj: A 3D image of waveforms.
     """
-    trace_reshaped = preprocessing.get_trace_reshaped(recording, frame)
+    trace_reshaped = preprocessing.get_trace_reshaped(recording, sample_frame)
     trace_transposed = np.transpose(trace_reshaped, (1, 0, 2))
 
     vmin = trace_transposed.min()
@@ -56,13 +57,13 @@ def plot_trace_image(recording, frame):
     plt.show()
     
     
-def plot_unit_waveform(recording, spikes_table, unit_id, all_waveforms=False, num_waveforms=10, seed=None):
+def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_waveforms=10, seed=None):
     """
     Plots waveforms for a specific spike unit at its extremum channel.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
-        spikes_table (obj): A table containing spike information.
+        spikes (obj): An array containing spike information.
         unit_id (int): ID number of a unit.
         all_waveforms (bool): Condition to plot all spikes within the unit.
         num_waveforms (int): number of spikes to plot.
@@ -70,27 +71,27 @@ def plot_unit_waveform(recording, spikes_table, unit_id, all_waveforms=False, nu
     Returns:
         obj: A 2D plot of waveforms.
     """
-    peak_frames, peak_channel = preprocessing.get_unit_frames_and_channel(spikes_table, unit_id)
+    sample_frames, extremum_channel = preprocessing.get_unit_frames_and_channel(spikes, unit_id)
 
     if all_waveforms:
-        peak_frames_to_plot = peak_frames
+        frames_to_plot = sample_frames
 
     else:
-        if len(peak_frames) < num_waveforms:
-            peak_frames_to_plot = peak_frames
+        if len(sample_frames) < num_waveforms:
+            frames_to_plot = sample_frames
         else:
             if seed is not None:
                 random.seed(seed)
-            peak_frames_to_plot = random.sample(peak_frames, num_waveforms)
+            frames_to_plot = random.sample(sample_frames, num_waveforms)
             
     plt.figure()
     
-    for peak_frame in peak_frames_to_plot:
-        trace_snippet = preprocessing.get_trace_snippet(recording, peak_frame)
-        plt.plot(trace_snippet[:, peak_channel])
+    for frame in frames_to_plot:
+        trace_snippet = preprocessing.get_trace_snippet(recording, frame)
+        plt.plot(trace_snippet[:, extremum_channel])
 
     plt.xlabel('time (frames)')
-    plt.title(f'Unit ID: {unit_id}\nPeak Channel: {peak_channel}')
+    plt.title(f'Unit ID: {unit_id}\nExtremum Channel: {extremum_channel}')
     
     plt.show()
     
