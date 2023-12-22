@@ -108,8 +108,8 @@ def get_unit_frames_and_channel(spikes, unit_id):
         extremum_channel (int): ID number of extremum channel for a single unit.
     """
     unit = get_unit(spikes, unit_id)
-    sample_frames = unit['sample_index'].to_list()
-    extremum_channel = unit['channel_index'].unique()[0]
+    sample_frames = unit['sample_index']
+    extremum_channel = np.unique(unit['channel_index'])[0]
     return sample_frames, extremum_channel
 
 
