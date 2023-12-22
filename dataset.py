@@ -1,11 +1,12 @@
 import os
 
-import h5py
-
 import numpy as np
+import h5py
 
 import torch
 from torch.utils.data import Dataset
+
+from sklearn.preprocessing import LabelEncoder
                         
                         
 class SupervisedDataset(Dataset):
@@ -21,7 +22,7 @@ class SupervisedDataset(Dataset):
         trace_times (list): List containing times for each trace in the dataset.
     """
 
-    def __init__(self, dataset_folder, unit_ids, shuffle=True, seed=0):
+    def __init__(self, dataset_folder, unit_ids, shuffle=True, seed=0, noise_samples=None):
         """
         Initializes the SupervisedDataset instance.
 
@@ -35,9 +36,11 @@ class SupervisedDataset(Dataset):
         self.unit_ids = unit_ids
         self.shuffle = shuffle
         self.seed = seed
+        self.noise_samples = noise_samples
         
         # Initialize and gather data
         self.trace_indices, self.times = self.initialize_dataset()
+        self.labels, self.labels_map = self.get_encoded_labels()
 
     def initialize_dataset(self):
         """
@@ -59,7 +62,10 @@ class SupervisedDataset(Dataset):
         for unit_id in self.unit_ids:
             hdf5_file_path = os.path.join(self.dataset_folder, f"unit_{unit_id}.h5")
             with h5py.File(hdf5_file_path, 'r') as file:
-                num_samples = file['traces'].shape[0]
+                if unit_id=='-01':
+                    num_samples = self.noise_samples
+                else:
+                    num_samples = file['traces'].shape[0]
                 unit_indices = [(unit_id, i) for i in range(num_samples)]
                 trace_indices.extend(unit_indices)
                 times.extend(file['times'][:])
@@ -104,6 +110,23 @@ class SupervisedDataset(Dataset):
         """
         labels = np.array([unit_id for unit_id, _ in self.trace_indices], dtype='<i8')
         return labels
+    
+    def get_encoded_labels(self):
+        """
+        Transforms and retrieves all label-encoded labels corresponding to the traces 
+        in the dataset as a NumPy array.
+
+        The labels are transformed to a contiguous range starting from 0.
+
+        Returns:
+            numpy.ndarray: An array containing the label-encoded labels for each trace in the dataset.
+        """
+        labels = self.get_labels()
+        label_encoder = LabelEncoder()
+        encoded_labels = np.array(label_encoder.fit_transform(labels), dtype='<i8')
+        labels_map = dict(zip(encoded_labels, labels))
+        
+        return encoded_labels, labels_map
 
     def __len__(self):
         """
@@ -126,7 +149,7 @@ class SupervisedDataset(Dataset):
         """
         unit_id, trace_idx = self.trace_indices[idx]
         trace = self.get_trace(unit_id, trace_idx)
-        label = int(unit_id)
+        label = self.labels[idx]
 
         return trace, label
 
@@ -319,12 +342,12 @@ class ClusteredDataset(Dataset):
         return trace, label
             
 
-def select_units(peaks_matched, min_samples, max_samples, seed = 0, num_units = None):
+def select_units(data, min_samples, max_samples, num_units = None, seed = 0, noise=False):
     # Set the seed for reproducibility
     np.random.seed(seed)
 
     # Create a value_counts object of unit_index from peaks_matched
-    units, samples = np.unique(peaks_matched['unit_index'], return_counts=True)
+    units, samples = np.unique(data['unit_index'], return_counts=True)
 
     # Filter units based on counts using boolean indexing
     filtered_units = units[(samples >= min_samples) & (samples <= max_samples)]
@@ -333,6 +356,12 @@ def select_units(peaks_matched, min_samples, max_samples, seed = 0, num_units = 
         selected_units = filtered_units
     else:
         selected_units = np.random.choice(filtered_units, size=num_units, replace=False)
+    
+    if noise:
+        # Resize, adding space for new item
+        selected_units.resize(selected_units.shape[0] + 1)  
+        # Assign new value 
+        selected_units[-1] = -1
 
     # Pad the selected_units with zeroes
     selected_units = [f"{unit:03d}" for unit in selected_units]
