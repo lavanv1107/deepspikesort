@@ -54,7 +54,7 @@ class DeepCluster(nn.Module):
 
 
 class Extractor(nn.Module):
-    def __init__(self):
+    def __init__(self, features_flattened):
         super().__init__()
         self.conv_layer_1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2)) 
         self.conv_layer_2 = nn.Conv2d(32, 64, kernel_size=4) 
@@ -62,7 +62,7 @@ class Extractor(nn.Module):
         self.conv_layer_2_drop = nn.Dropout2d()
         
         self.flatten = nn.Flatten()
-        self.fully_connected_layer_1 = nn.Linear(35328, 500)
+        self.fully_connected_layer_1 = nn.Linear(features_flattened, 500)
         
         self._initialize_weights()
 
@@ -89,7 +89,7 @@ class Extractor(nn.Module):
 
 
 class Classifier(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes, features_flattened):
         super().__init__()
         self.conv_layer_1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2)) 
         self.conv_layer_2 = nn.Conv2d(32, 64, kernel_size=4) 
@@ -97,8 +97,8 @@ class Classifier(nn.Module):
         self.conv_layer_2_drop = nn.Dropout2d()
         
         self.flatten = nn.Flatten()
-        self.fully_connected_layer_1 = nn.Linear(35328, 500)
-        self.fully_connected_layer_2 = nn.Linear(500, 100)
+        self.fully_connected_layer_1 = nn.Linear(features_flattened, 500)
+        self.fully_connected_layer_2 = nn.Linear(500, num_classes)
 
     def forward(self, x):
         x = F.relu(F.max_pool2d(torch.squeeze(self.conv_layer_1(x), 4), 2))
