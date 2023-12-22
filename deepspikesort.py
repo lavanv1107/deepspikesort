@@ -7,9 +7,12 @@ import numpy as np
 
 from torch.utils.data import DataLoader
 
+from sklearn.metrics import silhouette_score
 from sklearn.metrics import adjusted_rand_score
+from sklearn.metrics.pairwise import cosine_similarity
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 import spikeinterface.full as si
 
@@ -114,7 +117,9 @@ def run_deepspikesort(dataset, num_units, num_classes, model, gmm, num_epochs, k
                 compare_end = time.time()
 
                 aristab = adjusted_rand_score(previous_labels, cluster_labels)
-                aristabs.append(aristab)          
+                aristabs.append(aristab)    
+
+                log_metric_progress(logger_dss, aristab, num_units, epoch, results_folder)      
 
                 if aristab >= threshold_aristab:
                     convergence_counter += 1              
@@ -141,19 +146,16 @@ def run_deepspikesort(dataset, num_units, num_classes, model, gmm, num_epochs, k
             train_model = TrainModel(
                 kwargs_dict['device'], kwargs_dict['device_ids'], 
                 kwargs_dict['loss_fn'], kwargs_dict['optimizer'], 
-                train_dataloader=clustered_dataloader
+                train_dataloader=clustered_dataloader, verbose_count = kwargs_dict['verbose_count'],
             )
 
             print("- Training")
             print('Training model...')
             train_end = time.time()
 
-            train_model.train(model, epoch, kwargs_dict['verbose_count'])
+            train_model.train(model, epoch)
 
             print(f'\nTraining time: {time.time() - train_end:.3f}')
-
-            if epoch > 1:
-                log_metric_progress(logger_dss, aristab, num_units, epoch, results_folder)
                 
         except KeyboardInterrupt:
             break
@@ -180,10 +182,12 @@ def log_metric_progress(logger_dss, aristab, num_units, epoch, results_folder):
     
     
 def plot_metric_progress(metrics, num_units, num_epochs, results_folder):
-    # Dynamic figure width: base width + an additional width per epoch
-    base_width = 10  # Base width for the plot
-    width_per_epoch = 0.1  # Additional width per epoch
-    dynamic_width = base_width + width_per_epoch * num_epochs
+    # Calculate the width of the figure based on the number of epochs
+    base_width = 10
+    dynamic_width = (num_epochs / 100) * base_width
+
+    # Ensure a minimum width is maintained
+    dynamic_width = max(base_width, dynamic_width)
 
     # Number of subplots
     num_metrics = len(metrics)
@@ -197,10 +201,13 @@ def plot_metric_progress(metrics, num_units, num_epochs, results_folder):
     for ax, (metric_type, metric_info) in zip(axs, metrics.items()):
         ax.plot(range(1, num_epochs + 1), metric_info['values'], marker='o', color='r')
         ax.hlines(metric_info['threshold'], 1, num_epochs, colors='blue', linestyles='--')
-        ax.set_title(f'{metric_type} per Epoch')
+        ax.set_title(f'{metric_type}')
         ax.set_xlabel('Epoch')
         ax.set_ylabel(metric_type)
         ax.grid(True)
+        
+        ax.set_xlim(1, num_epochs)
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
     # Adjust layout
     plt.tight_layout()
