@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import random
 
 import preprocessing
 
@@ -43,12 +42,12 @@ def plot_trace_image(recording, sample_frame):
     vmin = trace_transposed.min()
     vmax = trace_transposed.max()
 
-    plt.figure(figsize=(8, 9))
+    plt.figure(figsize=(8, 10))
     for i in range(trace_reshaped.shape[2]):
         plt.subplot(1, 2, i + 1)
         plt.imshow(trace_transposed[:, :, i], cmap='viridis', vmin=vmin, vmax=vmax)
     # Set x and y labels for the plot
-    plt.text(0.5, 0.01, 'time (frames)', ha='center', va='center', transform=plt.gcf().transFigure)
+    plt.text(0.5, 0.05, 'time (frames)', ha='center', va='center', transform=plt.gcf().transFigure)
     plt.text(0.01, 0.5, 'channel', ha='center', va='center', rotation='vertical', transform=plt.gcf().transFigure)
     # Add colorbar for the plot
     cax = plt.axes([0.15, 0.95, 0.7, 0.03])  # [left, bottom, width, height]
@@ -57,7 +56,7 @@ def plot_trace_image(recording, sample_frame):
     plt.show()
     
     
-def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_waveforms=10, seed=None):
+def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_waveforms=10, seed=0):
     """
     Plots waveforms for a specific spike unit at its extremum channel.
  
@@ -80,9 +79,8 @@ def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_wave
         if len(sample_frames) < num_waveforms:
             frames_to_plot = sample_frames
         else:
-            if seed is not None:
-                random.seed(seed)
-            frames_to_plot = random.sample(sample_frames, num_waveforms)
+            np.random.seed(seed)  
+            frames_to_plot = np.random.choice(sample_frames, num_waveforms)
             
     plt.figure()
     
@@ -91,6 +89,7 @@ def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_wave
         plt.plot(trace_snippet[:, extremum_channel])
 
     plt.xlabel('time (frames)')
+    plt.ylabel('action potential (mV)')
     plt.title(f'Unit ID: {unit_id}\nExtremum Channel: {extremum_channel}')
     
     plt.show()
