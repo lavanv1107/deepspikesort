@@ -84,9 +84,6 @@ def create_dataset(recording, data, folder, process, batch_size=128):
     unit_inds = process['unit_inds']
     total_samples = process['total_samples']
     
-    print(f'Units in process: {unit_inds}')
-    print(f'Samples in process: {total_samples}')
-    
     # Iterate over each unit assigned to this process
     for unit in unit_inds:
         # Define the filename for the HDF5 file to save data for this unit
