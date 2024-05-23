@@ -1,27 +1,9 @@
+import os
+
 import numpy as np
 import pandas as pd
 
-import os
-
 import spikeinterface.full as si
-
-
-def channel_slice_electricalseriesap(recording):
-    """
-    Extracellular recordings can contain both action potential (AP) and low frequency (LF) electrical series.
-    SpikeInterface creates a RecordingExtractor object with 768 channels 
-    This extracts a slice of a recording with its AP electrical series.
- 
-    Args:
-        recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
- 
-    Returns:
-        obj: A sliced RecordingExtractor object with AP channels.
-    """
-    channel_ids = recording.get_channel_ids()
-    channel_ids_slice = channel_ids[0:384]
-    recording_slice = recording.channel_slice(channel_ids=channel_ids_slice)
-    return recording_slice
 
 
 def extract_channels(recording):
@@ -80,6 +62,44 @@ def extract_spikes(sorting, waveform):
     return spikes_filtered
 
 
+def create_noise(recording, spikes, num_samples=100000):
+    """
+    Creates a noise unit by selecting random samples from the recording that do not overlap with spike events.
+
+    Args:
+        recording: A RecordingExtractor object that provides access to the recording data.
+        spikes (np.ndarray): An array containing spike information, specifically the sample indices of spikes.
+
+    Returns:
+        np.ndarray: A structured array containing noise samples with unit index set to -1 and sample indices of the noise.
+    """
+    # Generate a range of sample indices, excluding the edges 
+    samples_range = np.arange(31, recording.get_num_frames() - 33)
+    
+    # Create a mask to exclude samples that are present in the spikes array
+    mask = ~np.isin(samples_range, spikes['sample_index'])
+    
+    # Select the samples that are not in the spikes array
+    noise_samples = samples_range[mask]
+    
+    # Randomly select samples from the noise samples 
+    selected_samples = np.random.choice(noise_samples, size=num_samples, replace=False)
+    
+    # Define the structured data type for the noise array
+    dtype = [('unit_index', '<i8'), ('sample_index', '<i8')]
+
+    # Create an empty array with the defined structured dtype
+    noise = np.empty(len(selected_samples), dtype=dtype)
+    
+    # Populate the unit_index with -1 to indicate noise
+    noise['unit_index'] = -1 
+    
+    # Assign the selected sample indices to sample_index
+    noise['sample_index'] = selected_samples
+    
+    return noise
+
+
 def get_unit(spikes, unit_id):
     """
     Creates an array of spike events for a single unit. 
@@ -95,9 +115,9 @@ def get_unit(spikes, unit_id):
     return unit
     
     
-def get_unit_frames_and_channel(spikes, unit_id):
+def get_unit_frames(spikes, unit_id):
     """
-    Returns all sample frames and extremum channel of a single unit.
+    Returns all sample frames of a single unit.
  
     Args:
         spikes (obj): An array of spike events.
@@ -105,12 +125,10 @@ def get_unit_frames_and_channel(spikes, unit_id):
  
     Returns:
         sample_frames (obj): A list of sample frames for a single unit.
-        extremum_channel (int): ID number of extremum channel for a single unit.
     """
     unit = get_unit(spikes, unit_id)
     sample_frames = unit['sample_index']
-    extremum_channel = np.unique(unit['channel_index'])[0]
-    return sample_frames, extremum_channel
+    return sample_frames
 
 
 def get_trace_snippet(recording, sample_frame):

@@ -1,8 +1,0 @@
-spikeinterface[full,widgets]
-psutil
-scikit-learn
-torch
-torchinfo
-torchvision
-seaborn
-pycave

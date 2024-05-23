@@ -4,24 +4,43 @@ import numpy as np
 import preprocessing
 
 
-def plot_trace_waveform(recording, sample_frame, channel):
+def plot_trace_waveform(recording, sample_time, channels):
     """
-    Plots a waveform at the specified time frame and channel.
+    Plots waveforms at the specified time frame for multiple channels, each in its own subplot.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
-        sample_frame (int): A frame number when a sample occurred.
-        channel (int): A channel number.
+        sample_time (int): A frame number when a sample occurred.
+        channels (list): A list of channel numbers.
  
     Returns:
         obj: A 2D plot of a waveform.
     """
-    trace_snippet = preprocessing.get_trace_snippet(recording, sample_frame)
+    trace_snippet = preprocessing.get_trace_snippet(recording, sample_time)
     
-    plt.figure()
+    num_channels = len(channels)
+    # Calculate columns to aim for a square-ish layout
+    cols = int(np.ceil(np.sqrt(num_channels)))
+    rows = np.ceil(num_channels / cols).astype(int)
+    
+    fig, axs = plt.subplots(rows, cols, figsize=(4 * cols, 3 * rows))  # Adjust figure size as needed
+    
+    # Ensure axs is an array even for a single subplot
+    axs = np.array(axs).reshape(-1)
 
-    plt.plot(trace_snippet[:, channel])
-    
+    # Loop through the list of channels and create a subplot for each
+    for i, channel in enumerate(channels):
+        axs[i].plot(trace_snippet[:, channel])
+        axs[i].set_title(f'Channel {channel}')
+        axs[i].set_xlabel('Time')  # Assuming the x-axis represents time
+        axs[i].set_ylabel('Amplitude')  # Adjust based on what the y-axis represents
+        axs[i].label_outer()  # Hide x labels and tick labels for top plots and y ticks for right plots.
+
+    # Disable unused subplots
+    for i in range(num_channels, rows * cols):
+        axs[i].axis('off')
+
+    plt.tight_layout()
     plt.show()
 
     
@@ -56,7 +75,7 @@ def plot_trace_image(recording, sample_frame):
     plt.show()
     
     
-def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_waveforms=10, seed=0):
+def plot_unit_waveform(recording, spikes, unit_id, channel_id, all_waveforms=False, num_waveforms=10, seed=0):
     """
     Plots waveforms for a specific spike unit at its extremum channel.
  
@@ -70,7 +89,7 @@ def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_wave
     Returns:
         obj: A 2D plot of waveforms.
     """
-    sample_frames, extremum_channel = preprocessing.get_unit_frames_and_channel(spikes, unit_id)
+    sample_frames = preprocessing.get_unit_frames(spikes, unit_id)
 
     if all_waveforms:
         frames_to_plot = sample_frames
@@ -86,11 +105,11 @@ def plot_unit_waveform(recording, spikes, unit_id, all_waveforms=False, num_wave
     
     for frame in frames_to_plot:
         trace_snippet = preprocessing.get_trace_snippet(recording, frame)
-        plt.plot(trace_snippet[:, extremum_channel])
+        plt.plot(trace_snippet[:, channel_id])
 
     plt.xlabel('time (frames)')
     plt.ylabel('action potential (mV)')
-    plt.title(f'Unit ID: {unit_id}\nExtremum Channel: {extremum_channel}')
+    plt.title(f'Unit ID: {unit_id}\nChannel: {channel_id}')
     
     plt.show()
     

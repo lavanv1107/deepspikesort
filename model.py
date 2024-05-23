@@ -1,21 +1,32 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 
-class DeepCluster(nn.Module):
-    def __init__(self, num_classes, features_flattened):
-        super(DeepCluster, self).__init__()
+class DeepSpikeSort(nn.Module):
+    def __init__(self, num_classes):
+        super(DeepSpikeSort, self).__init__()
         # Extractor layers
-        self.conv_layer_1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2)) 
-        self.conv_layer_2 = nn.Conv2d(32, 64, kernel_size=4) 
-        self.conv_layer_2_drop = nn.Dropout2d()
+        self.conv1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2))
+        self.bn1 = nn.BatchNorm3d(num_features=32) 
+        
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4)
+        self.bn2 = nn.BatchNorm2d(num_features=64) 
+        self.drop2 = nn.Dropout2d()
+        
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=4) 
+        self.bn3 = nn.BatchNorm2d(num_features=128) 
+        self.drop3 = nn.Dropout2d()
+        
         self.flatten = nn.Flatten()
         
         # Classifier layers
-        self.fully_connected_layer_1 = nn.Linear(features_flattened, 500) # figure out a suitable number of features
-        self.fully_connected_layer_2 = nn.Linear(500, num_classes)
+        self.fc1 = nn.Linear(35328, 5000)
+        self.fc2 = nn.Linear(5000, 1000)
+        self.fc3 = nn.Linear(1000, 500)
+        self.fc4 = nn.Linear(500, num_classes)
         
         # Initialize weights
         self._initialize_weights()
@@ -36,76 +47,30 @@ class DeepCluster(nn.Module):
         feature_extraction = inputs_dict.get('feature_extraction', False)
         
         # Extractor 
-        x = F.relu(F.max_pool2d(torch.squeeze(self.conv_layer_1(x), 4), 2))
-        x = F.relu(F.max_pool2d(self.conv_layer_2_drop(self.conv_layer_2(x)), 2))
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.max_pool2d(torch.squeeze(x, 4), 2)
+        
+        x = F.max_pool2d(F.relu(self.bn2(self.conv2(x))), 2)
+        x = self.drop2(x)
+        
+        # x = F.max_pool2d(F.relu(self.conv3(x)), 2)
+        # x = self.drop3(x)
         
         x = self.flatten(x)
         
-        x = F.relu(self.fully_connected_layer_1(x))
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        
+        x = F.relu(self.fc2(x))
+        x = F.dropout(x, training=self.training)        
+        
+        x = F.relu(self.fc3(x))
         
         if feature_extraction:
-            return x  # Returning here before dropout and the second fully connected layer
+            return x  
         
         # Classifier
         x = F.dropout(x, training=self.training)
-        x = self.fully_connected_layer_2(x)
+        x = self.fc4(x)
         
-        return x
-
-
-class Extractor(nn.Module):
-    def __init__(self, features_flattened):
-        super().__init__()
-        self.conv_layer_1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2)) 
-        self.conv_layer_2 = nn.Conv2d(32, 64, kernel_size=4) 
-        
-        self.conv_layer_2_drop = nn.Dropout2d()
-        
-        self.flatten = nn.Flatten()
-        self.fully_connected_layer_1 = nn.Linear(features_flattened, 500)
-        
-        self._initialize_weights()
-
-    def forward(self, x):
-        x = F.relu(F.max_pool2d(torch.squeeze(self.conv_layer_1(x), 4), 2))
-        x = F.relu(F.max_pool2d(self.conv_layer_2_drop(self.conv_layer_2(x)), 2))
-        
-        x = self.flatten(x)
-        x = F.relu(self.fully_connected_layer_1(x))
-        return x
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
-                nn.init.zeros_(m.bias)
-
-
-class Classifier(nn.Module):
-    def __init__(self, num_classes, features_flattened):
-        super().__init__()
-        self.conv_layer_1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2)) 
-        self.conv_layer_2 = nn.Conv2d(32, 64, kernel_size=4) 
-        
-        self.conv_layer_2_drop = nn.Dropout2d()
-        
-        self.flatten = nn.Flatten()
-        self.fully_connected_layer_1 = nn.Linear(features_flattened, 500)
-        self.fully_connected_layer_2 = nn.Linear(500, num_classes)
-
-    def forward(self, x):
-        x = F.relu(F.max_pool2d(torch.squeeze(self.conv_layer_1(x), 4), 2))
-        x = F.relu(F.max_pool2d(self.conv_layer_2_drop(self.conv_layer_2(x)), 2))
-        
-        x = self.flatten(x)
-        x = F.relu(self.fully_connected_layer_1(x))
-        x = F.dropout(x, training=self.training)
-        x = F.relu(self.fully_connected_layer_2(x))
         return x
