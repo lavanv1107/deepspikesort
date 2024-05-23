@@ -68,6 +68,8 @@ def create_dataset(recording, data, folder, process, batch_size=128):
         recording: A RecordingExtractor object created from an NWB file using SpikeInterface.
         data (obj): An array containing either spikes or peaks information with unit ids.
         folder (str): Path to the folder where HDF5 files will be saved.
+        process (dict): Dictionary containing 'unit_inds' (list of unit indices assigned to this process)
+                        and 'total_samples' (total number of samples assigned to this process).
         batch_size (int, optional): Number of samples to process in each batch. Defaults to 64.
     """
     batch_time_meter = AverageMeter()
