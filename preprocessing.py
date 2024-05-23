@@ -100,18 +100,24 @@ def create_noise(recording, spikes, num_samples=100000):
     return noise
 
 
-def get_unit(spikes, unit_id):
+def get_unit(spikes, unit_ids):
     """
-    Creates an array of spike events for a single unit. 
- 
+    Creates an array of spike events for one or more units.
+
     Args:
         spikes (obj): An array of spike events.
-        unit_id (int): ID number of a unit.
- 
+        unit_ids (int or list of int): A single unit ID or a list of unit IDs.
+
     Returns:
-        obj: An array of spike events for a single unit.
+        obj: An array of spike events for the specified unit(s).
     """
-    unit = spikes[spikes['unit_index'] == unit_id]
+    if isinstance(unit_ids, int):
+        # If a single unit ID is provided, convert it to a list
+        unit_ids = [unit_ids]
+    elif not isinstance(unit_ids, (list, np.ndarray)):
+        raise TypeError("unit_ids should be an int or a list/array of ints.")
+    
+    unit = spikes[np.isin(spikes['unit_index'], unit_ids)]
     return unit
     
     
