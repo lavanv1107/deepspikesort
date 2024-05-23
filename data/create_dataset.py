@@ -15,7 +15,7 @@ warnings.simplefilter("ignore")
 
 sys.path.append("..")
 from preprocessing import get_trace_reshaped
-from util import AverageMeter, write_separator
+from util import AverageMeter, print_separator
 
 
 def parse_args():
