@@ -6,7 +6,6 @@
 #SBATCH --mail-user=
 #SBATCH --mail-type=ALL
 #SBATCH -t 10:00:00
-#SBATCH -A 
 #SBATCH -o /path/to/create_dataset.out
 #SBATCH -e /path/to/create_dataset.err 
 #SBATCH -n 32
