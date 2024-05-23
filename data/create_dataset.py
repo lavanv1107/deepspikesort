@@ -15,17 +15,14 @@ warnings.simplefilter("ignore")
 
 sys.path.append("..")
 from preprocessing import get_trace_reshaped
-from util import AverageMeter, print_separator
+from util import AverageMeter
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process units and save data in HDF5 format.")
-    
     # Retrieve parameters from command line arguments
     parser.add_argument('recording_id', type=str, help="ID of the recording.")
     parser.add_argument('dataset_type', type=str, choices=['spikes', 'peaks', 'noise'], help="Type of dataset: 'spikes', 'peaks', or 'noise'.")
-    parser.add_argument('num_processes', type=int, help="Number of processes to distribute units across.")
-    parser.add_argument('process_id', type=int, help="Process ID for distributing units.")
     
     return parser.parse_args()
 
@@ -38,7 +35,7 @@ def main(args):
     # Determine the dataset folder and file based on the dataset type
     if args.dataset_type == 'spikes':
         dataset_folder = f'data/{args.recording_id}/spikes'
-        data_file = os.path.join(dataset_folder, "spikes.npy")  
+        data_file = os.path.join(dataset_folder, "spikes_test.npy")  
     elif args.dataset_type == 'noise':
         dataset_folder = f'data/{args.recording_id}/spikes'
         data_file = os.path.join(dataset_folder, "noise.npy")
@@ -49,14 +46,25 @@ def main(args):
     # Load data from the file
     data = np.load(data_file)    
 
-    # Distribute the units among the processes
-    dist_units = distribute_units(data['unit_index'], args.num_processes)
+    # Determine if running within SLURM
+    process_id = int(os.getenv('SLURM_PROCID', 0))
+    num_tasks = int(os.getenv('SLURM_NTASKS', 1))
     
-    # Get the assigned units for the current process ID
-    assigned_units = dist_units[args.process_id]
+    # Determine the subset of units for this process
+    unit_indices = np.unique(data['unit_index'])
+    units_per_task = len(unit_indices) // num_tasks
+    start_idx = process_id * units_per_task
+    end_idx = start_idx + units_per_task if process_id != num_tasks - 1 else len(unit_indices)
+    assigned_units = unit_indices[start_idx:end_idx]
+    
+    # Filter data for assigned units
+    assigned_data = data[np.isin(data['unit_index'], assigned_units)]
+    
+    # Store process information
+    process_info = {'unit_inds': assigned_units, 'total_samples': len(assigned_data)}
     
     # Process the units and save data in HDF5 format
-    create_dataset(recording_preprocessed, data, dataset_folder, assigned_units)
+    create_dataset(recording_preprocessed, assigned_data, dataset_folder, process_info)
     
     
 def create_dataset(recording, data, folder, process, batch_size=128):
@@ -68,8 +76,6 @@ def create_dataset(recording, data, folder, process, batch_size=128):
         recording: A RecordingExtractor object created from an NWB file using SpikeInterface.
         data (obj): An array containing either spikes or peaks information with unit ids.
         folder (str): Path to the folder where HDF5 files will be saved.
-        process (dict): Dictionary containing 'unit_inds' (list of unit indices assigned to this process)
-                        and 'total_samples' (total number of samples assigned to this process).
         batch_size (int, optional): Number of samples to process in each batch. Defaults to 64.
     """
     batch_time_meter = AverageMeter()
@@ -83,10 +89,6 @@ def create_dataset(recording, data, folder, process, batch_size=128):
     
     # Iterate over each unit assigned to this process
     for unit in unit_inds:
-        print(write_separator())
-        print(f'Unit {unit}')
-        print(write_separator())
-        
         # Define the filename for the HDF5 file to save data for this unit
         hdf5_filename = os.path.join(folder, f"unit_{unit:03}.h5")
         
@@ -135,49 +137,6 @@ def create_dataset(recording, data, folder, process, batch_size=128):
                 if batch % verbose_interval == 0:
                     print(f'Unit: [{unit}][{batch}/{total_batches}]\t'
                           f'Time: {batch_time_meter.val:.3f} ({batch_time_meter.avg:.3f})')
-        
-        
-def distribute_units(unit_inds, num_processes):
-    """
-    Distributes units among a specified number of tasks to balance the workload.
-
-    Args:
-        unit_inds (list): A list of unit indices to be distributed.
-        num_processes (int, optional): The number of processes to distribute the units across.
-
-    Returns:
-        dict: A dictionary where each key is a process identifier (from 1 to num_processes),
-              and each value is a dictionary containing:
-              - 'unit_inds' (list): The list of unit indices assigned to the process.
-              - 'total_samples' (int): The total number of samples assigned to the process.
-    """
-    # Count the occurrences of each unit index to get the number of samples per unit
-    unit_counts = dict(Counter(unit_inds))
-    
-    # Calculate the total number of samples
-    total_samples = sum(unit_counts.values())
-    
-    # Calculate the target number of samples per process for even distribution
-    target_samples_per_process = total_samples / num_processes
-
-    # Initialize a dictionary to store the processes and their assigned units and samples
-    processes = {i: {'unit_inds': [], 'total_samples': 0} for i in range(1, num_processes + 1)}
-
-    # Sort units by the number of samples in descending order to allocate larger units first
-    sorted_units = sorted(unit_counts.items(), key=lambda x: x[1], reverse=True)
-
-    # Distribute units among processes
-    for unit, samples in sorted_units:
-        # Find the process with the minimum total samples assigned so far
-        min_process = min(processes, key=lambda x: processes[x]['total_samples'])
-        
-        # Assign the current unit to this process
-        processes[min_process]['unit_inds'].append(unit)
-        
-        # Update the total samples for this process
-        processes[min_process]['total_samples'] += samples
-
-    return processes
 
 
 if __name__ == "__main__":

@@ -12,7 +12,10 @@
 #SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=4
 
+# Change to the main directory
+cd /path/to/main_folder
+
 # Set PYTHONPATH to include the main folder
 export PYTHONPATH=$PYTHONPATH:/path/to/main_folder
 
-srun -u python -m data.create_dataset sub-CSHL049 spikes $SLURM_NTASKS ${SLURM_PROCID}
+srun -u python -m data.create_dataset 
