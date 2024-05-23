@@ -13,8 +13,8 @@ from accelerate import Accelerator
 from .classify import ClassifyPipeline
 
 sys.path.append("..")
-from load_dataset import select_units, TraceDataset
-from model import DeepSpikeSort
+from data import load_dataset
+from models import model
 
 warnings.simplefilter("ignore")
 
@@ -42,13 +42,13 @@ def main(args):
     spikes = np.load(spikes_file)  
 
     # Select units based on the parameters
-    selected_units = select_units(spikes, min_samples=args.min_samples, max_samples=args.max_samples, num_units=args.num_units)
+    selected_units = load_dataset.select_units(spikes, min_samples=args.min_samples, max_samples=args.max_samples, num_units=args.num_units)
     
     # Create a supervised trace dataset from selected units
-    spikes_dataset = TraceDataset(spikes_folder, 'supervised', selected_units, num_samples=args.num_samples, noise_samples=args.noise_samples)
+    spikes_dataset = load_dataset.TraceDataset(spikes_folder, 'supervised', selected_units, num_samples=args.num_samples, noise_samples=args.noise_samples)
     
      # Define the CNN model
-    cnn = DeepSpikeSort(len(selected_units))
+    cnn = model.DeepSpikeSort(len(selected_units))
     
     # Specify loss function and optimizer
     loss_fn = nn.CrossEntropyLoss()    

@@ -17,6 +17,9 @@
 export MASTER_ADDR=$(hostname)
 export MASTER_PORT=29500
 
+# Change to the main directory
+cd /path/to/main_folder
+
 # Set PYTHONPATH to include the main folder
 export PYTHONPATH=$PYTHONPATH:/path/to/main_folder
 
