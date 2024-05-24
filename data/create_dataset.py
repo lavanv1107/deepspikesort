@@ -35,7 +35,7 @@ def main(args):
     # Determine the dataset folder and file based on the dataset type
     if args.dataset_type == 'spikes':
         dataset_folder = f'data/{args.recording_id}/spikes'
-        data_file = os.path.join(dataset_folder, "spikes_test.npy")  
+        data_file = os.path.join(dataset_folder, "spikes.npy")  
     elif args.dataset_type == 'noise':
         dataset_folder = f'data/{args.recording_id}/spikes'
         data_file = os.path.join(dataset_folder, "noise.npy")
