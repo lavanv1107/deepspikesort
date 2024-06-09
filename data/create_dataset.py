@@ -35,7 +35,7 @@ def main(args):
     # Determine the dataset folder and file based on the dataset type
     if args.dataset_type == 'spikes':
         dataset_folder = f'data/{args.recording_id}/spikes'
-        data_file = os.path.join(dataset_folder, "spikes_test.npy")  
+        data_file = os.path.join(dataset_folder, "spikes.npy")  
     elif args.dataset_type == 'noise':
         dataset_folder = f'data/{args.recording_id}/spikes'
         data_file = os.path.join(dataset_folder, "noise.npy")
@@ -83,9 +83,6 @@ def create_dataset(recording, data, folder, process, batch_size=128):
     # Get the list of unit indices and total number of samples assigned to this process
     unit_inds = process['unit_inds']
     total_samples = process['total_samples']
-    
-    print(f'Units in process: {unit_inds}')
-    print(f'Samples in process: {total_samples}')
     
     # Iterate over each unit assigned to this process
     for unit in unit_inds:
