@@ -1,10 +1,8 @@
 import argparse
+import datetime
 import os
 import sys
-import time
 import warnings
-
-from collections import Counter
 
 import numpy as np
 import h5py
@@ -29,8 +27,8 @@ def parse_args():
 
 def main(args):    
     # Load the preprocessed recording using SpikeInterface
-    preprocessed_folder = f"data/{args.recording_id}/extractors/preprocessed"
-    recording_preprocessed = si.load_extractor(preprocessed_folder)
+    recording_folder = f"data/{args.recording_id}/extractors/preprocessed"
+    recording_preprocessed = si.load_extractor(recording_folder)
     
     # Determine the dataset folder and file based on the dataset type
     if args.dataset_type == 'spikes':
@@ -50,24 +48,34 @@ def main(args):
     process_id = int(os.getenv('SLURM_PROCID', 0))
     num_tasks = int(os.getenv('SLURM_NTASKS', 1))
     
-    # Determine the subset of units for this process
-    unit_indices = np.unique(data['unit_index'])
-    units_per_task = len(unit_indices) // num_tasks
-    start_idx = process_id * units_per_task
-    end_idx = start_idx + units_per_task if process_id != num_tasks - 1 else len(unit_indices)
-    assigned_units = unit_indices[start_idx:end_idx]
+    # Get unique units and the size of data per unit
+    unit_inds, counts = np.unique(data['unit_index'], return_counts=True)
+    unit_sizes = dict(zip(unit_inds, counts))
+    
+    # Sort units by the amount of data, largest first (helps with balancing)
+    units_sorted = sorted(unit_sizes.items(), key=lambda x: -x[1])
+
+    # Initialize workload trackers
+    workloads = {i: 0 for i in range(num_tasks)}
+    task_units = {i: [] for i in range(num_tasks)}
+
+    # Greedily assign units to the least loaded task
+    for unit, size in units_sorted:
+        # Find the task with the minimum workload
+        min_task = min(workloads, key=workloads.get)
+        task_units[min_task].append(unit)
+        workloads[min_task] += size
+        
+    units_assigned = task_units[process_id]
     
     # Filter data for assigned units
-    assigned_data = data[np.isin(data['unit_index'], assigned_units)]
-    
-    # Store process information
-    process_info = {'unit_inds': assigned_units, 'total_samples': len(assigned_data)}
+    data_assigned = data[np.isin(data['unit_index'], units_assigned)]
     
     # Process the units and save data in HDF5 format
-    create_dataset(recording_preprocessed, assigned_data, dataset_folder, process_info)
+    create_dataset(recording_preprocessed, units_assigned, data_assigned, dataset_folder)
     
     
-def create_dataset(recording, data, folder, process, batch_size=128):
+def create_dataset(recording, unit_inds, data, folder, batch_size=128, verbose_count=25):
     """
     Creates a dataset in parallel by iterating over units and saving
     batches of samples and their identifiers in HDF5 file format.
@@ -78,62 +86,39 @@ def create_dataset(recording, data, folder, process, batch_size=128):
         folder (str): Path to the folder where HDF5 files will be saved.
         batch_size (int, optional): Number of samples to process in each batch. Defaults to 64.
     """
-    batch_time_meter = AverageMeter()
-    
-    # Get the list of unit indices and total number of samples assigned to this process
-    unit_inds = process['unit_inds']
-    total_samples = process['total_samples']
-    
     # Iterate over each unit assigned to this process
-    for unit in unit_inds:
+    for unit_idx in unit_inds:
         # Define the filename for the HDF5 file to save data for this unit
-        hdf5_filename = os.path.join(folder, f"unit_{unit:03}.h5")
-        
-        # Open the HDF5 file in write mode
-        with h5py.File(hdf5_filename, 'w') as hdf5_file:
-            # Filter the data for the current unit
-            data_filtered = data[data['unit_index'] == unit]
-            
-            # Get the sample indices for the current unit
-            sample_inds = data_filtered['sample_index']
-            
-            # Calculate the total number of samples and batches
-            total_samples = len(sample_inds)
-            total_batches = total_samples // batch_size
+        file = os.path.join(folder, f"unit_{unit_idx:03}.h5")
+        with h5py.File(file, 'w') as handle:        
+            properties = data[list(data.dtype.names)][data['unit_index'] == unit]        
 
             # Pre-allocate datasets for traces and times in the HDF5 file
-            data_shape = (total_samples,) + get_trace_reshaped(recording, sample_inds[0]).shape
-            traces_dataset = hdf5_file.create_dataset("traces", shape=data_shape, dtype=np.float32)
-            times_dataset = hdf5_file.create_dataset("times", (total_samples,), dtype=np.int32)
-            
-            # Define intervals for logging progress
-            min_interval = 1
-            verbose_interval = max(min_interval, total_batches // 50) 
+            handle.create_dataset('properties', data=properties)
+            handle.create_dataset('traces', shape=(len(properties), 64, 192, 2), dtype='<f8')
 
-            end = time.time()
+            num_batches = len(properties) // batch_size
+            padding = len(str(num_batches))
+            verbose_interval = max(1, num_batches // verbose_count) 
+
             # Iterate over the samples in batches
-            for i in range(0, total_samples, batch_size):
+            for i in range(0, len(properties), batch_size):
                 # Determine the end index for the current batch
-                batch_end = min(i + batch_size, total_samples)
-                batch_samples = sample_inds[i:batch_end]
+                end_idx = min(i + batch_size, len(properties))
+
+                batch_times = properties['time'][i:end_idx]
 
                 # Process data for the current batch
-                batch_traces = np.array([get_trace_reshaped(recording, sample) for sample in batch_samples])
-                traces_dataset[i:batch_end] = batch_traces
+                batch_traces = np.array([get_trace_reshaped(recording, time) for time in batch_times])
+                handle['traces'][i:end_idx] = batch_traces
 
-                # Assign time identifiers for each sample in the batch
-                batch_times = [sample for sample in batch_samples]  
-                times_dataset[i:batch_end] = batch_times
+                datetime_formatted = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
 
-                # Update and log time taken for the batch
-                batch_time_meter.update(time.time() - end)
-                end = time.time()
-                
                 # Log progress every few batches
                 batch = i // batch_size
+                batch_formatted = f"{batch+1:0{padding}d}"
                 if batch % verbose_interval == 0:
-                    print(f'Unit: [{unit}][{batch}/{total_batches}]\t'
-                          f'Time: {batch_time_meter.val:.3f} ({batch_time_meter.avg:.3f})')
+                    print(f'{datetime_formatted} - [{unit}][{batch_formatted}/{num_batches}]')   
 
 
 if __name__ == "__main__":

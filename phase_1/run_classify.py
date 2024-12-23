@@ -44,8 +44,16 @@ def main(args):
     # Select units based on the parameters
     selected_units = load_dataset.select_units(spikes, min_samples=args.min_samples, max_samples=args.max_samples, num_units=args.num_units)
     
+    #
+    channels_file = f'data/{args.recording_id}/channels.npy'
+    channels = np.load(channels_file)
+    
     # Create a supervised trace dataset from selected units
-    spikes_dataset = load_dataset.TraceDataset(spikes_folder, 'supervised', selected_units, num_samples=args.num_samples, noise_samples=args.noise_samples)
+    spikes_dataset = load_dataset.TraceDataset(
+        spikes_folder, 'supervised', 
+        selected_units, num_samples=args.num_samples, noise_samples=args.noise_samples, 
+        data=spikes, channels=channels, method='mask'
+    )
     
      # Define the CNN model
     cnn = model.DeepSpikeSort(len(selected_units))

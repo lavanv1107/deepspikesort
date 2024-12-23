@@ -8,9 +8,12 @@ import torch
 from torch.utils.data import Dataset
 
 from sklearn.preprocessing import LabelEncoder
+
+sys.path.append("..")
+from preprocessing import get_channel_neighbors, get_channel_ind_reshaped
                         
 
-def select_units(data, min_samples=0, max_samples='max', num_units='all', seed=0):
+def select_units(data, num_units='all', min_samples=0, max_samples='max', seed=0):
     """
     Selects unit indices from data within a specified range of sample counts, including a noise unit.
 
@@ -42,23 +45,20 @@ def select_units(data, min_samples=0, max_samples='max', num_units='all', seed=0
     max_samples = samples.max() if max_samples == 'max' else max_samples
     
     # Filter units based on the specified min and max sample counts
-    filtered_units = units[(samples >= min_samples) & (samples <= max_samples)]
+    units_filtered = units[(samples >= min_samples) & (samples <= max_samples)]
     
     # Determine the number of units to select
-    num_units = len(filtered_units) if num_units == 'all' else num_units
+    num_units = len(units_filtered) if num_units == 'all' else num_units
 
     # Check if the number of units requested is available after filtering
-    if num_units > len(filtered_units):
-        print(f"Error: Required {num_units} units, but only found {len(filtered_units)} units within the specified range.")
+    if num_units > len(units_filtered):
+        print(f"Error: Required {num_units} units, but only found {len(units_filtered)} units within the specified range.")
         sys.exit()
 
     # Select units
-    selected_units = np.random.choice(filtered_units, size=num_units, replace=False) if num_units < len(filtered_units) else filtered_units
-
-    # Append a noise unit represented by -1
-    # selected_units = np.append(selected_units, -1)
+    units_selected = np.random.choice(units_filtered, size=num_units, replace=False) if num_units < len(units_filtered) else units_filtered
     
-    return selected_units
+    return units_selected
 
 
 class TraceDataset(Dataset):
@@ -66,7 +66,7 @@ class TraceDataset(Dataset):
     A PyTorch Dataset class for loading trace data from HDF5 files. 
     """
 
-    def __init__(self, dataset_folder, dataset_type, unit_ids, num_samples='all', noise_samples=0, shuffle=True, seed=0):
+    def __init__(self, dataset_folder, dataset_type, unit_inds, num_samples='all', noise_samples=0, shuffle=True, seed=0, channels=None, method=None):
         """
         Initializes the TraceDataset instance based on the specified dataset type 
         (supervised or unsupervised).
@@ -87,6 +87,8 @@ class TraceDataset(Dataset):
             Whether to shuffle the dataset, by default True.
         seed : int, optional
             Random seed for shuffling, by default 0.
+        data: numpy.ndarray
+            A numpy array of detected peak events.
 
         Attributes
         ----------
@@ -99,23 +101,25 @@ class TraceDataset(Dataset):
         labels_map : dict
             Mapping of encoded labels to original labels. Only relevant for supervised mode.
         """
-        self.dataset_folder = dataset_folder
-        
+        self.dataset_folder = dataset_folder        
         self.dataset_type = dataset_type
         
-        self.unit_ids = unit_ids
+        self.unit_inds = unit_inds
         self.num_samples = num_samples
         self.noise_samples = noise_samples
         
         self.shuffle = shuffle
         self.seed = seed
         
+        self.channels = channels
+        self.method = method
+        
         # Prepares the dataset
-        self.trace_indices, self.times = self.prepare_dataset()
+        self.properties, self.trace_inds = self.prepare_dataset()
         
         if self.dataset_type == 'supervised':
             self.labels, self.labels_map = self.get_encoded_labels()
-        else:
+        elif self.dataset_type == 'unsupervised':
             self.labels, self.labels_map = None, None
 
     def prepare_dataset(self):
@@ -124,52 +128,41 @@ class TraceDataset(Dataset):
 
         Returns
         -------
-        tuple of list and numpy.ndarray
-            trace_indices : list of (int, int)
-                List of tuples, each containing unit ID and index within the file.
-            times : numpy.ndarray
-                Numpy array of trace times corresponding to each index.
+        trace_indices : list of (int, int)
+            List of tuples, each containing unit ID and index within the file.
+        times : numpy.ndarray
+            Numpy array of trace times corresponding to each index.
         """
-        # List to hold the indices of each trace and their corresponding times
-        trace_indices = []
-        times = []
+        properties = []
+        trace_inds = []
         
-        # Pad unit indices with zeroes and convert to strings 
-        unit_ids = [f"{unit_id:03}" for unit_id in self.unit_ids]
-
         # Loop through each unit and load data from its corresponding HDF5 file
-        for unit_id in unit_ids:
-            hdf5_file_path = os.path.join(self.dataset_folder, f"unit_{unit_id}.h5")
+        for unit_idx in self.unit_inds:
+            file = os.path.join(self.dataset_folder, f"unit_{unit_idx:03}.h5")
             
-            try:
-                # Open the HDF5 file and extract relevant data
-                with h5py.File(hdf5_file_path, 'r') as file:
-                    # Determine the number of samples to load
-                    if unit_id == '-01':
-                        num_samples = self.noise_samples if self.noise_samples != 'all' else file['traces'].shape[0]
-                    else:
-                        num_samples = self.num_samples if self.num_samples != 'all' else file['traces'].shape[0]
+            with h5py.File(file, 'r') as handle:
+                # Determine the number of samples to load
+                if unit_idx == -1:
+                    num_samples = self.noise_samples if self.noise_samples != 'all' else handle['traces'].shape[0]
+                else:
+                    num_samples = self.num_samples if self.num_samples != 'all' else handle['traces'].shape[0]
 
-                    # Create index pairs for each sample in this unit
-                    unit_indices = [(unit_id, i) for i in range(num_samples)]
-                    trace_indices.extend(unit_indices)
+                # Create index pairs for each sample in this unit
+                unit_trace_inds = [(unit_idx, i) for i in range(num_samples)]
+                trace_inds.extend(unit_trace_inds)
 
-                    # Add corresponding times for each sample
-                    times.extend(file['times'][:])
-            except OSError as e:
-                print(f"Error opening file: {hdf5_file_path}. Exception: {e}")
-                continue
+                properties.append(handle['properties'][:])
 
         # Convert the list of times to a numpy array
-        times = np.array(times, dtype='<i8')
+        properties = np.concatenate(properties)
 
         # Shuffle the dataset
         if self.shuffle:
-            trace_indices, times = self.shuffle_dataset(trace_indices, times)
+            properties, trace_inds = self.shuffle_dataset(properties, trace_inds)
 
-        return trace_indices, times
+        return properties, trace_inds
 
-    def shuffle_dataset(self, trace_indices, times):
+    def shuffle_dataset(self, properties, trace_inds):
         """
         Shuffles the dataset while maintaining the correlation between trace indices and times.
 
@@ -191,15 +184,15 @@ class TraceDataset(Dataset):
         np.random.seed(self.seed)
 
         # Generate a shuffled array of indices
-        shuffle_indices = np.random.permutation(len(trace_indices))
+        inds_shuffled = np.random.permutation(len(trace_inds))
 
         # Shuffle trace_indices and times using the generated indices
-        trace_indices = [trace_indices[i] for i in shuffle_indices]
-        times = times[shuffle_indices]
+        properties = properties[inds_shuffled]
+        trace_inds = [trace_inds[idx_shuffled] for idx_shuffled in inds_shuffled]
         
-        return trace_indices, times
+        return properties, trace_inds
 
-    def get_trace(self, unit_id, idx):
+    def get_trace(self, unit_idx, trace_idx):
         """
         Loads a trace from an HDF5 file at the specified index.
 
@@ -215,9 +208,10 @@ class TraceDataset(Dataset):
         torch.Tensor
             The trace data as a tensor.
         """
-        hdf5_file_path = os.path.join(self.dataset_folder, f"unit_{unit_id}.h5")
-        with h5py.File(hdf5_file_path, 'r') as file:
-            trace = torch.from_numpy(file['traces'][idx]).unsqueeze(0).float()
+        file = os.path.join(self.dataset_folder, f"unit_{unit_idx:03}.h5")        
+        with h5py.File(file, 'r') as handle:           
+            trace = torch.from_numpy(handle['traces'][trace_idx])
+            
         return trace
     
     def get_labels(self):
@@ -229,7 +223,7 @@ class TraceDataset(Dataset):
         numpy.ndarray
             An array containing labels for each trace in the dataset.
         """
-        labels = np.array([unit_id for unit_id, _ in self.trace_indices], dtype='<i8')
+        labels = np.array([unit_idx for unit_idx, _ in self.trace_inds], dtype='<i8')        
         return labels
     
     def get_encoded_labels(self):
@@ -248,22 +242,16 @@ class TraceDataset(Dataset):
                 Mapping of encoded labels to original labels.
         """
         labels = self.get_labels()
-        label_encoder = LabelEncoder()
-        encoded_labels = np.array(label_encoder.fit_transform(labels), dtype='<i8')
-        labels_map = dict(zip(encoded_labels, labels))
         
-        return encoded_labels, labels_map
-
+        label_encoder = LabelEncoder()        
+        labels_encoded = np.array(label_encoder.fit_transform(labels), dtype='<i8')
+        
+        labels_map = dict(zip(labels_encoded, labels))
+        
+        return labels_encoded, labels_map    
+        
     def __len__(self):
-        """
-        Returns the number of traces in the dataset.
-
-        Returns
-        -------
-        int
-            The total number of traces in the dataset.
-        """
-        return len(self.trace_indices)
+        return len(self.properties)
 
     def __getitem__(self, idx):
         """
@@ -287,14 +275,24 @@ class TraceDataset(Dataset):
             torch.Tensor
                 The trace tensor without a corresponding label.
         """
-        unit_id, trace_idx = self.trace_indices[idx]
-        trace = self.get_trace(unit_id, trace_idx)
+        unit_idx, trace_idx = self.trace_inds[idx]
+        trace = self.get_trace(unit_idx, trace_idx)
+        
+        # Apply the appropriate method to the trace
+        if self.method == 'mask':
+            if unit_idx == -1:
+                trace = torch.zeros_like(trace)
+            else:
+                trace = mask_trace(self.properties, idx, self.channels, trace)
+        elif self.method == 'slice':
+            trace = slice_trace(self.times, idx, self.data, self.channels, trace)
 
+        # Return the trace along with the label if supervised
         if self.dataset_type == 'supervised':
             label = self.labels[idx]
-            return trace, label
+            return trace.unsqueeze(0).float(), label
         elif self.dataset_type == 'unsupervised':
-            return trace
+            return trace.unsqueeze(0).float()
 
     
 class ClusteredDataset(Dataset):
@@ -308,7 +306,7 @@ class ClusteredDataset(Dataset):
         cluster_labels (list): List of cluster labels corresponding to each image.
     """
 
-    def __init__(self, dataset_folder, trace_indices, cluster_labels):
+    def __init__(self, dataset_folder, trace_inds, cluster_labels, properties=None, channels=None, method=None):
         """
         Initializes the ClusteredDataset instance.
 
@@ -318,10 +316,15 @@ class ClusteredDataset(Dataset):
             cluster_labels (list): A list containing cluster labels for each image in the dataset.
         """
         self.dataset_folder = dataset_folder
-        self.trace_indices = trace_indices
+        
+        self.trace_inds = trace_inds
         self.cluster_labels = cluster_labels
+        
+        self.properties = properties
+        self.channels = channels
+        self.method = method
     
-    def get_trace(self, unit_id, idx):
+    def get_trace(self, unit_idx, trace_idx):
         """
         Loads a trace from an HDF5 file at the specified index.
 
@@ -332,19 +335,14 @@ class ClusteredDataset(Dataset):
         Returns:
             torch.Tensor: The trace data as a tensor.
         """
-        hdf5_file_path = os.path.join(self.dataset_folder, f"unit_{unit_id}.h5")
-        with h5py.File(hdf5_file_path, 'r') as file:
-            trace = torch.from_numpy(file['traces'][idx]).unsqueeze(0).float()
+        file = os.path.join(self.dataset_folder, f"unit_{unit_idx:03}.h5")        
+        with h5py.File(file, 'r') as handle:
+            trace = torch.from_numpy(handle['traces'][trace_idx])
+            
         return trace
 
     def __len__(self):
-        """
-        Returns the number of traces (and labels) in the dataset.
-
-        Returns:
-            int: The total number of traces in the dataset.
-        """
-        return len(self.trace_indices)
+        return len(self.properties)
 
     def __getitem__(self, idx):
         """
@@ -356,9 +354,44 @@ class ClusteredDataset(Dataset):
         Returns:
             tuple: A tuple containing the trace tensor and its cluster label.
         """
-        unit_id, trace_idx = self.trace_indices[idx]
-        trace = self.get_trace(unit_id, trace_idx)
+        unit_idx, trace_idx = self.trace_inds[idx]
+        trace = self.get_trace(unit_idx, trace_idx)
+        
+        if self.method == 'mask':
+            trace = mask_trace(self.properties, idx, self.channels, trace)
+            
         label = self.cluster_labels[idx]
         
-        return trace, label
-            
+        return trace.unsqueeze(0).float(), label
+    
+    
+def mask_trace(properties, idx, channels, trace):
+    channel_idx = properties[idx]['channel_index']       
+
+    neighbor_channels = get_channel_neighbors(channels, channel_idx, 80)['channel_index']
+
+    channels_unmasked = np.append(neighbor_channels, channel_idx)    
+    
+    trace_masked = torch.zeros_like(trace)
+
+    for channel in channels_unmasked:
+        # Determine the channel's location (row and column)
+        row, column = get_channel_ind_reshaped(channel) 
+
+        # Apply masking for the specific channel
+        trace_masked[:, row, column] = trace[:, row, column]
+
+    return trace_masked
+
+
+def slice_trace(times, idx, data, channels, trace):
+    time = times[idx]
+    channel_ind = data['channel_index'][data['time'] == time][0]    
+
+    channel_neighbors = get_channel_neighbors(channels, channel_ind, 220)['channel_index']
+    slice_min = get_channel_ind_reshaped(min(channel_neighbors))[0]
+    slice_max = get_channel_ind_reshaped(max(channel_neighbors))[0]
+
+    trace_slice = trace[:, slice_min:slice_max+1, :]
+    
+    return trace_slice

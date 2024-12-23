@@ -8,7 +8,6 @@ import torch.nn.functional as F
 class DeepSpikeSort(nn.Module):
     def __init__(self, num_classes):
         super(DeepSpikeSort, self).__init__()
-        # Extractor layers
         self.conv1 = nn.Conv3d(1, 32, kernel_size=(9, 3, 2))
         self.bn1 = nn.BatchNorm3d(num_features=32) 
         
@@ -16,20 +15,14 @@ class DeepSpikeSort(nn.Module):
         self.bn2 = nn.BatchNorm2d(num_features=64) 
         self.drop2 = nn.Dropout2d()
         
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=4) 
-        self.bn3 = nn.BatchNorm2d(num_features=128) 
-        self.drop3 = nn.Dropout2d()
-        
         self.flatten = nn.Flatten()
         
-        # Classifier layers
         self.fc1 = nn.Linear(35328, 5000)
-        self.fc2 = nn.Linear(5000, 1000)
-        self.fc3 = nn.Linear(1000, 500)
-        self.fc4 = nn.Linear(500, num_classes)
+        self.fc2 = nn.Linear(5000, num_classes) 
         
         # Initialize weights
         self._initialize_weights()
+        
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -41,36 +34,23 @@ class DeepSpikeSort(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+                
 
-    def forward(self, inputs_dict):
-        x = inputs_dict['x']
-        feature_extraction = inputs_dict.get('feature_extraction', False)
-        
-        # Extractor 
+    def forward(self, x, feature_extraction=False):
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.max_pool2d(torch.squeeze(x, 4), 2)
         
         x = F.max_pool2d(F.relu(self.bn2(self.conv2(x))), 2)
         x = self.drop2(x)
         
-        # x = F.max_pool2d(F.relu(self.conv3(x)), 2)
-        # x = self.drop3(x)
-        
         x = self.flatten(x)
         
         x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        
-        x = F.relu(self.fc2(x))
-        x = F.dropout(x, training=self.training)        
-        
-        x = F.relu(self.fc3(x))
         
         if feature_extraction:
             return x  
         
-        # Classifier
         x = F.dropout(x, training=self.training)
-        x = self.fc4(x)
+        x = self.fc2(x)
         
         return x

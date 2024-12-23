@@ -1,5 +1,12 @@
-import matplotlib.pyplot as plt
+import itertools
 import numpy as np
+
+from sklearn.decomposition import PCA
+
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+from IPython.display import HTML, display, clear_output
 
 import preprocessing
 
@@ -7,72 +14,123 @@ import preprocessing
 def plot_trace_waveform(recording, sample_time, channels):
     """
     Plots waveforms at the specified time frame for multiple channels, each in its own subplot.
- 
+    
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
         sample_time (int): A frame number when a sample occurred.
-        channels (list): A list of channel numbers.
- 
+        channels (int or list): A channel number or a list of channel numbers.
+    
     Returns:
         obj: A 2D plot of a waveform.
     """
+    # Split channels into odd and even
+    odd_channels = channels[channels % 2 == 1]
+    even_channels = channels[channels % 2 == 0]
+    
+    # Set number of columns to 2 (one for odd channels, one for even channels)
+    cols = 2
+    num_plots_odd = len(odd_channels)
+    num_plots_even = len(even_channels)
+    
+    # Calculate the number of rows needed for each side
+    rows = max(num_plots_odd, num_plots_even)
+    
+    # Create subplots
+    fig, axs = plt.subplots(rows, cols, figsize=(8, 3 * rows))  
+    
+    # Retrieve trace snippet for the given sample time
     trace_snippet = preprocessing.get_trace_snippet(recording, sample_time)
     
-    num_channels = len(channels)
-    # Calculate columns to aim for a square-ish layout
-    cols = int(np.ceil(np.sqrt(num_channels)))
-    rows = np.ceil(num_channels / cols).astype(int)
+    # Plot waveforms for odd channels
+    for i, channel in enumerate(odd_channels):
+        axs[i, 0].plot(trace_snippet[:, channel])
+        axs[i, 0].set_title(f'Channel {channel}')
     
-    fig, axs = plt.subplots(rows, cols, figsize=(4 * cols, 3 * rows))  # Adjust figure size as needed
+    # Plot waveforms for even channels
+    for i, channel in enumerate(even_channels):
+        axs[i, 1].plot(trace_snippet[:, channel])
+        axs[i, 1].set_title(f'Channel {channel}')
     
-    # Ensure axs is an array even for a single subplot
-    axs = np.array(axs).reshape(-1)
-
-    # Loop through the list of channels and create a subplot for each
-    for i, channel in enumerate(channels):
-        axs[i].plot(trace_snippet[:, channel])
-        axs[i].set_title(f'Channel {channel}')
-        axs[i].set_xlabel('Time')  # Assuming the x-axis represents time
-        axs[i].set_ylabel('Amplitude')  # Adjust based on what the y-axis represents
-        axs[i].label_outer()  # Hide x labels and tick labels for top plots and y ticks for right plots.
-
     # Disable unused subplots
-    for i in range(num_channels, rows * cols):
-        axs[i].axis('off')
+    for i in range(num_plots_odd, rows):
+        axs[i, 0].axis('off')
+    
+    for i in range(num_plots_even, rows):
+        axs[i, 1].axis('off')
 
-    plt.tight_layout()
+    # Set main title
+    fig.suptitle(f'Sample Index: {sample_time}', fontsize=14)
+
+    # Add one y-label and x-label for the whole plot
+    fig.text(0.04, 0.5, 'action potential (μV)', va='center', rotation='vertical', fontsize=12)
+    fig.text(0.5, 0.04, 'time (frames)', ha='center', fontsize=12)
+
+    plt.tight_layout(rect=[0.05, 0.05, 1, 0.95])
     plt.show()
 
     
-def plot_trace_image(recording, sample_frame):
+def plot_trace_image(recording, sample_frame, columns):
     """
     Plots a 3D image of waveforms at the specified time frame and all channels.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
         sample_frame (int): A frame number when a sample occurred.
+        columns (str): 'single' for all channels in one column. 'double' for channels split into two columns.
  
     Yields:
         obj: A 3D image of waveforms.
     """
-    trace_reshaped = preprocessing.get_trace_reshaped(recording, sample_frame)
-    trace_transposed = np.transpose(trace_reshaped, (1, 0, 2))
+    if columns == 'single':
+        trace_snippet = preprocessing.get_trace_snippet(recording, sample_frame)        
+        trace_transposed = np.transpose(trace_snippet)
+        
+        vmin = trace_transposed.min()
+        vmax = trace_transposed.max()
 
-    vmin = trace_transposed.min()
-    vmax = trace_transposed.max()
+        plt.figure(figsize=(8, 6))
+        plt.imshow(trace_transposed, cmap='viridis', vmin=vmin, vmax=vmax, aspect='auto')
 
-    plt.figure(figsize=(8, 10))
-    for i in range(trace_reshaped.shape[2]):
-        plt.subplot(1, 2, i + 1)
-        plt.imshow(trace_transposed[:, :, i], cmap='viridis', vmin=vmin, vmax=vmax)
-    # Set x and y labels for the plot
-    plt.text(0.5, 0.05, 'time (frames)', ha='center', va='center', transform=plt.gcf().transFigure)
-    plt.text(0.01, 0.5, 'channel', ha='center', va='center', rotation='vertical', transform=plt.gcf().transFigure)
-    # Add colorbar for the plot
-    cax = plt.axes([0.15, 0.95, 0.7, 0.03])  # [left, bottom, width, height]
-    cb = plt.colorbar(cax=cax, orientation='horizontal')
+        # Set x and y labels for the plot
+        plt.xlabel('time (frames)')
+        plt.ylabel('channel index')
+
+        # Add colorbar for the plot
+        cb = plt.colorbar(orientation='vertical')
+
+        plt.tight_layout()
+        plt.show()
+        
+    if columns == 'double':
+        trace_reshaped = preprocessing.get_trace_reshaped(recording, sample_frame)
+        trace_transposed = np.transpose(trace_reshaped, (1, 0, 2))
+
+        vmin = trace_transposed.min()
+        vmax = trace_transposed.max()
+
+        plt.figure(figsize=(8, 10))
+        for i in range(trace_reshaped.shape[2]):
+            plt.subplot(1, 2, i + 1)
+            plt.imshow(trace_transposed[:, :, i], cmap='viridis', vmin=vmin, vmax=vmax)
+        # Set x and y labels for the plot
+        plt.text(0.5, 0.05, 'time (frames)', ha='center', va='center', transform=plt.gcf().transFigure)
+        plt.text(0.01, 0.5, 'channel index', ha='center', va='center', rotation='vertical', transform=plt.gcf().transFigure)
+        # Add colorbar for the plot
+        cax = plt.axes([0.15, 0.95, 0.7, 0.03])  # [left, bottom, width, height]
+        cb = plt.colorbar(cax=cax, orientation='horizontal')
+
+        plt.show()
+        
+        
+def plot_unit_image(recording, spikes, unit_id, columns, seed=0):
+    unit = preprocessing.get_unit(spikes, unit_id)
     
-    plt.show()
+    np.random.seed(seed)
+    unit_spike = np.random.choice(unit)
+    
+    unit_spike_frame = unit_spike['time']
+    
+    plot_trace_image(recording, unit_spike_frame, columns)
     
     
 def plot_unit_waveform(recording, spikes, unit_id, channel_id, all_waveforms=False, num_waveforms=10, seed=0):
@@ -109,7 +167,7 @@ def plot_unit_waveform(recording, spikes, unit_id, channel_id, all_waveforms=Fal
 
     plt.xlabel('time (frames)')
     plt.ylabel('action potential (mV)')
-    plt.title(f'Unit ID: {unit_id}\nChannel: {channel_id}')
+    plt.title(f'Unit Index: {unit_id}\nChannel Index: {channel_id}')
     
     plt.show()
     
@@ -131,3 +189,4 @@ def plot_peak_waveform(recording, peaks_noise_table, start_idx, end_idx):
         peak_frame = peaks_noise_table.loc[idx, 'peak_frame']
         peak_channel = peaks_noise_table.loc[idx, 'peak_channel']
         plot_trace_waveform(recording, peak_frame, peak_channel)
+        

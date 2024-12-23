@@ -1,21 +1,21 @@
 #!/bin/bash
-#SBATCH -N 2
+#SBATCH -N 1
 #SBATCH -C cpu
 #SBATCH -q regular
 #SBATCH -J create_dataset
-#SBATCH --mail-user=
+#SBATCH --mail-user=vatanaklavan@proton.me
 #SBATCH --mail-type=ALL
 #SBATCH -t 10:00:00
-#SBATCH -o /path/to/create_dataset.out
-#SBATCH -e /path/to/create_dataset.err 
+#SBATCH -o /pscratch/sd/v/vlavan/deep_spike_sort/create_dataset.out
+#SBATCH -e /pscratch/sd/v/vlavan/deep_spike_sort/create_dataset.err 
 #SBATCH -n 32
-#SBATCH --ntasks-per-node=16
+#SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=4
 
 # Change to the main directory
-cd /path/to/main_folder
+cd /pscratch/sd/v/vlavan/deep_spike_sort
 
 # Set PYTHONPATH to include the main folder
-export PYTHONPATH=$PYTHONPATH:/path/to/main_folder
+export PYTHONPATH=$PYTHONPATH:/pscratch/sd/v/vlavan/deep_spike_sort
 
-srun -u python -m data.create_dataset 
+srun -u python -m data.create_dataset sub-CSHL049 peaks

@@ -16,50 +16,86 @@ def extract_channels(recording):
     Returns:
         obj: An array of channel locations.
     """
-    channel_locations = recording.get_channel_locations()
-
-    # Define the structured data type
-    dtype = [('channel_loc_x', '<f8'), ('channel_loc_y', '<f8')]
-
+    channel_locs = recording.get_channel_locations()    
+    
+    # Define structured data type
+    dt = np.dtype([('channel_index', '<i8'), ('channel_location_x', '<i8'), ('channel_location_y', '<i8')])
+    
     # Create an empty array with the structured dtype
-    channels = np.empty(len(channel_locations), dtype=dtype)
+    channels = np.empty(len(channel_locs), dtype=dt)
 
     # Assign values from the original array to the structured array
-    channels['channel_loc_x'] = channel_locations[:, 0]
-    channels['channel_loc_y'] = channel_locations[:, 1]
+    channels['channel_index'] = np.arange(0, len(channel_locs))
+    channels['channel_location_x'] = channel_locs[:, 0]
+    channels['channel_location_y'] = channel_locs[:, 1]
 
     return channels
 
 
-def extract_spikes(sorting, waveform):
+def get_channel_location(channels, channel_ind):
+    channel_loc_x = channels[channels['channel_index'] == channel_ind]['channel_location_x'][0]
+    channel_loc_y = channels[channels['channel_index'] == channel_ind]['channel_location_y'][0]
+    
+    return channel_loc_x, channel_loc_y
+
+
+def get_channel_neighbors(channels, channel_ind, radius):
+    # Identify the location of the channel
+    channel_loc_x, channel_loc_y = get_channel_location(channels, channel_ind)
+
+    # Calculate the Euclidean distance to the channel
+    distances = np.sqrt((channels['channel_location_x'] - channel_loc_x) ** 2 + (channels['channel_location_y'] - channel_loc_y) ** 2)
+
+    # Filter houses within specified radius
+    radius_mask = (distances <= radius) & (channels['channel_index'] != channel_ind)
+    channel_neighbors = channels[radius_mask]
+    
+    return channel_neighbors
+
+
+def get_channel_ind_reshaped(channel_ind):
+    if channel_ind % 2 == 0:        
+        return channel_ind // 2, 0
+    else:
+        return channel_ind // 2, 1
+        
+
+def extract_spikes(sorting, analyzer, channels):
     """
     Creates an array of each spike event including the frame and channel at which its peak occurred. 
  
     Args:
         sorting (obj): A SortingExtractor object created from an NWB file using SpikeInterface.
-        waveform (obj): A WaveformExtractor object created from a RecordingExtractor and SortingExtractor object.
  
     Returns:
         obj: A numpy array of spike events.
     """
-    extremum_channels = si.get_template_extremum_channel(waveform, outputs="index")
+    extremum_channel_inds = si.get_template_extremum_channel(analyzer, outputs="index")
     
-    spikes = sorting.to_spike_vector(extremum_channel_inds = extremum_channels)
+    spikes = sorting.to_spike_vector(extremum_channel_inds = extremum_channel_inds)
     
-    # Columns to keep
-    columns_filtered = ['unit_index', 'sample_index', 'channel_index']
-
     # Define a new dtype with only the desired columns
-    dtype_filtered = np.dtype([(name, spikes.dtype[name]) for name in columns_filtered])
+    dt = spikes.dtype.descr + [('spike_index', '<i8'), ('channel_location_x', '<i8'), ('channel_location_y', '<i8')]
+    del dt[2]
+    dt = [dt[ind] for ind in [3, 0, 2, 4, 5, 1]]
 
     # Create a new array with the new dtype
-    spikes_filtered = np.zeros(spikes.shape, dtype=dtype_filtered)
+    spikes_extracted = np.empty(len(spikes), dtype=np.dtype(dt))
+        
+    spikes_extracted['spike_index'] = np.arange(0, len(spikes_extracted))
 
     # Copy data from the old array to the new array
-    for name in dtype_filtered.names:
-        spikes_filtered[name] = spikes[name]
+    for descr in [dt[1], dt[2], dt[5]]:
+        spikes_extracted[descr[0]] = spikes[descr[0]]
+        
+    channel_loc_dict = {channel['channel_index']: (channel['channel_location_x'], channel['channel_location_y']) for channel in channels}
+    
+    for i, spike in enumerate(spikes_extracted):
+        channel_loc_x, channel_loc_y = channel_loc_dict.get(spike['channel_index'], ('Unknown', 'Unknown'))  # Handles missing IDs
+        spikes_extracted[i]['channel_location_x'] = channel_loc_x
+        spikes_extracted[i]['channel_location_y'] = channel_loc_y
 
-    return spikes_filtered
+    return spikes_extracted
 
 
 def create_noise(recording, spikes, num_samples=100000):
@@ -174,3 +210,26 @@ def get_trace_reshaped(recording, sample_frame):
             trace_snippet[:, 1::2]
         ))
     return trace_reshaped
+
+
+def mask_trace(spike, channels, trace, columns):
+    channel_idx = spike['channel_index']       
+
+    neighbor_channels = get_channel_neighbors(channels, channel_idx, 80)['channel_index']
+
+    channels_unmasked = np.append(neighbor_channels, channel_idx)    
+    
+    trace_masked = np.zeros_like(trace)
+
+    for channel in channels_unmasked:
+        if columns == 'single':
+            trace_masked[:, channel] = trace[:, channel]
+            
+        if columns == 'double':
+            # Determine the channel's location (row and column)
+            row, column = get_channel_ind_reshaped(channel) 
+            
+            # Apply masking for the specific channel
+            trace_masked[:, row, column] = trace[:, row, column]
+
+    return trace_masked

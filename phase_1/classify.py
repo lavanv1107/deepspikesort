@@ -464,8 +464,7 @@ class ClassifyPipeline():
         plt.tight_layout()
         plt.savefig(os.path.join(self.output_folder, f'{self.session_id}_progress_plot.png'))
 
-        
-        
+          
     def plot_confusion_matrix(self, true_labels, predicted_labels):
         """
         Plots a confusion matrix based on true and predicted labels.
