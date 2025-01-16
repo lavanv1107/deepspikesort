@@ -14,6 +14,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH -C gpu&hbm80g
 
+# These environment variables are required for setting up the master node for distributed training with PyTorch
 export MASTER_ADDR=$(hostname)
 export MASTER_PORT=29500
 

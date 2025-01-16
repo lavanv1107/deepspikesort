@@ -476,6 +476,7 @@ class DeepSpikeSortPipeline():
                 # Synchronize before next epoch
                 self.accelerator.wait_for_everyone()
 
+            # If ctrl-C is pressed, break the loop and close the output data handler
             except KeyboardInterrupt:
                 break
 

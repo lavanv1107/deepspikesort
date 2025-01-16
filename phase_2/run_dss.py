@@ -76,7 +76,7 @@ def main(args):
         print("Building pipeline...")
     
     # Define the CNN model
-    cnn = model.DeepSpikeSort(num_units)  
+    cnn = model.DeepSpikeSort(num_units)
     
     # Specify loss function and optimizer
     loss_fn = nn.CrossEntropyLoss()    
