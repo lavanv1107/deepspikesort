@@ -1,3 +1,9 @@
+"""
+For our experiments, we parallelize the creation of peak datasets (traces from all channels around
+a detected peak) into N tasks. Each task generates an HDF5 file with two datasets: "properties" and
+"traces". This script combines the datasets from those N HDF5 files into one HDF5 file named 
+"peaks.h5" and adds another dataset, "channel_locations". 
+"""
 import argparse
 import os
 
