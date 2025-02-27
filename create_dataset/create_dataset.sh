@@ -17,4 +17,6 @@ cd /path/to/main_folder
 # Set PYTHONPATH to include the main folder
 export PYTHONPATH=$PYTHONPATH:/path/to/main_folder
 
+# For example, if your data is in `[project root]/data/sub-CSHL049/`, then change the below command to:
+# srun -u python -m data.create_dataset sub-CSHL049
 srun -u python -m data.create_dataset ...
