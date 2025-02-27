@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 def filter_peaks(recording, peaks):
     """
-    Filters invalid peaks which are not centered between 31 and 33 frames.
+    Filters out peaks that are too close to the ends of the recording. We require a trace has 64 samples
+    with the peak centered at least 31 samples from the start and 33 samples from the end.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
