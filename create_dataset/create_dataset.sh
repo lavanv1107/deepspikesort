@@ -8,7 +8,7 @@
 #SBATCH -t 1:00:00
 #SBATCH -o /path/to/create_dataset.out
 #SBATCH -e /path/to/create_dataset.err 
-#SBATCH -n 16
+#SBATCH -n 16  # <-- Customize the number of tasks to run
 #SBATCH -c 16
 
 # Change to the main directory
