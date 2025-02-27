@@ -8,9 +8,9 @@ from numba import jit
 from tqdm import tqdm
 
 
-def filter_peaks(recording, peaks, channels):
+def filter_peaks(recording, peaks):
     """
-    Filters peaks which do not fit in with the time frame format (centered between 31 and 33 frames) will be dropped.
+    Filters invalid peaks which are not centered between 31 and 33 frames.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
@@ -18,35 +18,13 @@ def filter_peaks(recording, peaks, channels):
  
     Returns:
         obj: A table containing peaks information.
-    """
-    # Define a new dtype 
-    dt = peaks.dtype.descr[:-1] + [('peak_index', '<i8'), ('channel_location_x', '<i8'), ('channel_location_y', '<i8')]
-    
-    dt = [dt[idx] for idx in [3, 0, 1, 4, 5, 2]]
-
-    # Create a new array with the new dtype
-    peaks_filtered = np.empty(len(peaks), dtype=np.dtype(dt))
-    
-    peaks_filtered['peak_index'] = np.arange(0, len(peaks_filtered))
-
-    # Copy data from the old array to the new array
-    for descr in [dt[1], dt[2], dt[5]]:
-        peaks_filtered[descr[0]] = peaks[descr[0]]   
-        
-    dt[1] = ('time', '<i8')
-    peaks_filtered = peaks_filtered.astype(dt)
+    """    
+    peaks = peaks[['sample_index', 'channel_index', 'amplitude']]
     
     # Create a boolean mask to identify rows within the specified range
-    mask = (peaks_filtered['sample_index'] >= 31) & (peaks_filtered['sample_index'] <= recording.get_num_frames() - 33)
+    mask = (peaks['sample_index'] >= 31) & (peaks['sample_index'] <= recording.get_num_frames() - 33)
 
-    peaks_filtered = peaks_filtered[mask]    
-        
-    channel_loc_dict = {channel['channel_index']: (channel['channel_location_x'], channel['channel_location_y']) for channel in channels}
-    
-    for i, peak in tqdm(enumerate(peaks_filtered), total=len(peaks_filtered), desc="add channel locations"):
-        channel_loc_x, channel_loc_y = channel_loc_dict.get(peak['channel_index'], ('Unknown', 'Unknown'))  # Handles missing IDs
-        peaks_filtered[i]['channel_location_x'] = channel_loc_x
-        peaks_filtered[i]['channel_location_y'] = channel_loc_y
+    peaks_filtered = peaks[mask]    
     
     return peaks_filtered
     
@@ -55,7 +33,7 @@ def filter_peaks(recording, peaks, channels):
 def match_peaks(peaks, spikes):
     """
     There are peaks that were detected which are spikes. We can verify this using the spikes information within the NWB file.
-    However, there are peaks which are not exact spike matches but they are very close and can be considered as such.
+    However, there are peaks which are not exact spike matches but are very close and can be considered as such.
     
     Here are the conditions for the matching process:
     - Spikes occurring within a range of 4 values from the time of a peak are selected as possible matches.
