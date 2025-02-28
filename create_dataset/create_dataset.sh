@@ -3,7 +3,7 @@
 #SBATCH -C cpu
 #SBATCH -q regular
 #SBATCH -J create_dataset
-#SBATCH --mail-user=
+#SBATCH --mail-user=  # Customize the email address to send notifications
 #SBATCH --mail-type=ALL
 #SBATCH -t 1:00:00
 #SBATCH -o /path/to/create_dataset.out
