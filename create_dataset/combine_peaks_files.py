@@ -44,12 +44,8 @@ def find_peaks_files(folder):
     Returns:
         List of paths to peak files.
     """
-    peaks_files = []
-    pattern = re.compile(r'peaks_(\d+)\.h5$')
-    
-    for filename in os.listdir(folder):
-        if pattern.match(filename):
-            peaks_files.append(os.path.join(folder, filename))
+    # Find all peaks_*.h5 files
+    peaks_files = glob.glob(os.path.join(folder, "peaks_*.h5"))
     
     # Sort files numerically by their indices
     peaks_files.sort(key=lambda f: int(re.search(r'peaks_(\d+)\.h5$', f).group(1)))
