@@ -6,6 +6,7 @@ detected peaks) into N tasks. Each task generates an HDF5 file with two datasets
 """
 
 import argparse
+import glob
 import os
 import re
 
