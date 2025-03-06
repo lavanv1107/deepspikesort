@@ -29,7 +29,7 @@ def main(args):
     data_folder = f'data/{args.recording_id}'
     
     recording = si.load_extractor(os.path.join(data_folder, "extractors/preprocessed"))
-    peaks = np.load(os.path.join(data_folder, "peaks/peaks_test.npy"))
+    peaks = np.load(os.path.join(data_folder, "peaks/peaks.npy"))
 
     # Calculate chunk for this process
     chunk_size = len(peaks) // num_tasks
@@ -38,12 +38,12 @@ def main(args):
     
     # Create output file for this process
     output_file = os.path.join(data_folder, f"peaks/peaks_{process_id}.h5")
-    process_peaks(recording, peaks[start_idx:end_idx], process_id, output_file)
+    create_peaks_files(recording, peaks[start_idx:end_idx], process_id, output_file)
     
     print(f"Process {process_id}: Completed processing {end_idx - start_idx} peaks")
 
 
-def process_peaks(recording, peaks, process_id, output_file, batch_size=128):
+def create_peaks_files(recording, peaks, process_id, output_file, batch_size=128):
     """
     Process and save a chunk of data to its own HDF5 file.
     
