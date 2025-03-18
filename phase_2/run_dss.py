@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument("min_samples", type=int, help="Minimum number of samples per unit")
     parser.add_argument("max_samples", type=determine_count, help="Maximum number of samples per unit")
     parser.add_argument("num_units", type=determine_count, help="Number of units")
-    parser.add_argument("seed", type=int, help="Seed for randsom slection of units")
+    parser.add_argument("seed", type=int, help="Seed for random slection of units")
     parser.add_argument("num_samples", type=determine_count, help="Number of samples per unit")
     parser.add_argument("noise_samples", type=determine_count, help="Number of noise samples")
     parser.add_argument("method", type=str, help="Method to handle coincedent spikes")    
