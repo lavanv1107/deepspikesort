@@ -106,14 +106,14 @@ def match_peaks(peaks, spikes, channel_locations):
                 least_distance = distance
                 
     # Define a new dtype
-    dt = peaks.dtype.descr + [('unit_index', '<i8')]
+    dt = [('sample_index', '<i8'), ('channel_index', '<i8'), ('amplitude', '<f8')] + [('unit_index', '<i8')]
     
     # Create a new array with the new dtype
     peaks_matched = np.zeros(peaks.shape, dtype=np.dtype(dt))
     
     # Copy data from the old array to the new array
-    for column in dt[:-1]:
-        peaks_matched[column[0]] = peaks[column[0]]
+    for field_name in peaks.dtype.names:
+        peaks_matched[field_name] = peaks[field_name]
         
     # Fill the new column with matches
     peaks_matched['unit_index'] = matches
