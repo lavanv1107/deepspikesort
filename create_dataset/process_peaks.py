@@ -10,8 +10,7 @@ from tqdm import tqdm
 
 def filter_peaks(recording, peaks):
     """
-    Filters out peaks that are too close to the ends of the recording. We require a trace has 64 samples
-    with the peak centered at least 31 samples from the start and 33 samples from the end.
+    Filters invalid peaks which are not centered between 31 and 33 frames.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
@@ -31,74 +30,94 @@ def filter_peaks(recording, peaks):
     
     
 
-def match_peaks(peaks, spikes):
+def match_peaks(peaks, spikes, channel_locations):
     """
-    There are peaks that were detected which are spikes. We can verify this using the spikes information within the NWB file.
-    However, there are peaks which are not exact spike matches but are very close and can be considered as such.
+    Match detected peaks with spikes from the NWB file.
     
     Here are the conditions for the matching process:
-    - Spikes occurring within a range of 4 values from the time of a peak are selected as possible matches.
-    - Euclidean distance (channel location x, channel location y, time) is then calculated between a spike and the peak.
+    - Spikes occurring within a range of 4 values from the sample_index of a peak are selected as possible matches.
+    - Euclidean distance (channel location x, channel location y, sample_index) is calculated between a spike and the peak.
     - The closest match is found when the Euclidean distance is less than 100 μm, the least distance we set as a threshold.
     - Once we have iterated through all possible matches, the peak is assigned the unit ID of the matching spike.
     - If there is no spike match, the unit ID for that peak is set to -1.
     
-    Once we have completed the spike matching process, a new peaks table will be created with a unit_id column.
- 
     Args:
-        peaks_table (obj): A table containing peaks information.
-        spikes_table (obj): A table containing spike information.
-        channels_table (obj): A table of channel locations.
+        peaks (array): A structured array containing peaks information with channel_index.
+        spikes (array): A structured array containing spike information.
+        channel_locations (array): A structured array containing channel_ind, channel_location_x, and channel_location_y.
  
     Returns:
-        obj: An array containing peaks information with unit ids.
+        array: An array containing peaks information with unit ids.
     """
     # Create an array to store matches
     matches = -1 * np.ones(len(peaks), dtype='<i8')
-
+    
     # Iterate through peaks_array using indices 
     for i, peak in tqdm(enumerate(peaks), total=len(peaks), desc="match peaks to spikes"): 
+        # Find channel location for the current peak
+        channel_idx = peak['channel_index']
+        channel_mask = channel_locations['channel_index'] == channel_idx
+        
+        # Skip if channel not found
+        if not np.any(channel_mask):
+            continue
+            
+        # Get channel location for the peak
+        peak_loc_x = channel_locations[channel_mask]['channel_location_x'][0]
+        peak_loc_y = channel_locations[channel_mask]['channel_location_y'][0]
             
         # Find the starting index for possible matches using binary search
-        start_idx = np.searchsorted(spikes['time'], peak['time'] - 4)
-
+        start_idx = np.searchsorted(spikes['sample_index'], peak['sample_index'] - 4)
+        
         # Set the least amount of distance between the current peak and spike channels
         least_distance = 100 # in um
-
+        
         # Iterate through potential matching spikes
         for x in range(start_idx, len(spikes)):
             spike = spikes[x]
-
-            # Exit the loop if spike_time exceeds the upper bound
-            if spike['time'] > peak['time'] + 4:
+            
+            # Exit the loop if spike sample_index exceeds the upper bound
+            if spike['sample_index'] > peak['sample_index'] + 4:
                 break
-
+                
+            # Get channel location for the spike
+            spike_channel_idx = spike['channel_index']
+            spike_channel_mask = channel_locations['channel_index'] == spike_channel_idx
+            
+            # Skip if channel not found
+            if not np.any(spike_channel_mask):
+                continue
+                
+            # Get channel location for the spike
+            spike_loc_x = channel_locations[spike_channel_mask]['channel_location_x'][0]
+            spike_loc_y = channel_locations[spike_channel_mask]['channel_location_y'][0]
+            
             # Calculating the distance in space and time
             # This gives equal weight between 1 um and 1 time sample
             distance = np.sqrt(
-                (spike['channel_location_x'] - peak['channel_location_x'])**2 + 
-                (spike['channel_location_y'] - peak['channel_location_y'])**2 + 
-                (spike['time'] - peak['time'])**2
+                (spike_loc_x - peak_loc_x)**2 + 
+                (spike_loc_y - peak_loc_y)**2 + 
+                (spike['sample_index'] - peak['sample_index'])**2
             )
-
+            
             # Set a unit_id for the peak if a spike is closest in distance to the current peak
             if distance < least_distance:
-                matches[i]= spike['unit_index']
+                matches[i] = spike['unit_index']
                 least_distance = distance
-
+                
     # Define a new dtype
-    dt = peaks.dtype.descr + [('unit_index', '<i8')]
-
+    dt = [('sample_index', '<i8'), ('channel_index', '<i8'), ('amplitude', '<f8')] + [('unit_index', '<i8')]
+    
     # Create a new array with the new dtype
     peaks_matched = np.zeros(peaks.shape, dtype=np.dtype(dt))
-
+    
     # Copy data from the old array to the new array
-    for column in dt[:-1]:
-        peaks_matched[column[0]] = peaks[column[0]]
+    for field_name in peaks.dtype.names:
+        peaks_matched[field_name] = peaks[field_name]
         
     # Fill the new column with matches
     peaks_matched['unit_index'] = matches
-
+    
     return peaks_matched
     
     
