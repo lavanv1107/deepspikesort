@@ -17,6 +17,9 @@ cd /path/to/main_folder
 # Set PYTHONPATH to include the main folder
 export PYTHONPATH=$PYTHONPATH:/path/to/main_folder
 
+module load conda
+conda activate environment_name
+
 # For example, if your data is in `[project root]/data/sub-CSHL049/`, then change the below command to:
 # srun -u python -m create_dataset.create_peaks_files sub-CSHL049
-srun -u python -m create_dataset.create_peaks_files ...
+srun -u python -m create_dataset.create_peaks_files sub-CSHL049

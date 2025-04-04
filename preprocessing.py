@@ -62,39 +62,37 @@ def get_channel_ind_reshaped(channel_ind):
 
 def extract_spikes(sorting, analyzer, channels):
     """
-    Creates an array of each spike event including the frame and channel at which its peak occurred. 
+    Creates a simplified array of spike events with only sample_index, channel_index, and unit_index.
  
     Args:
         sorting (obj): A SortingExtractor object created from an NWB file using SpikeInterface.
+        analyzer (obj): Analyzer object containing template information.
+        channels (obj): Array containing channel information.
  
     Returns:
-        obj: A numpy array of spike events.
+        obj: A numpy array of spike events with minimal required fields.
     """
+    # Get the extremum channel indices from the analyzer
     extremum_channel_inds = si.get_template_extremum_channel(analyzer, outputs="index")
     
-    spikes = sorting.to_spike_vector(extremum_channel_inds = extremum_channel_inds)
+    # Get spike vector with extremum channel indices
+    spikes = sorting.to_spike_vector(extremum_channel_inds=extremum_channel_inds)
     
-    # Define a new dtype with only the desired columns
-    dt = spikes.dtype.descr + [('spike_index', '<i8'), ('channel_location_x', '<i8'), ('channel_location_y', '<i8')]
-    del dt[2]
-    dt = [dt[ind] for ind in [3, 0, 2, 4, 5, 1]]
-
-    # Create a new array with the new dtype
-    spikes_extracted = np.empty(len(spikes), dtype=np.dtype(dt))
-        
-    spikes_extracted['spike_index'] = np.arange(0, len(spikes_extracted))
-
-    # Copy data from the old array to the new array
-    for descr in [dt[1], dt[2], dt[5]]:
-        spikes_extracted[descr[0]] = spikes[descr[0]]
-        
-    channel_loc_dict = {channel['channel_index']: (channel['channel_location_x'], channel['channel_location_y']) for channel in channels}
+    # Define a new dtype with only the three desired columns
+    new_dtype = [
+        ('sample_index', '<i8'),
+        ('channel_index', '<i8'),
+        ('unit_index', '<i8')
+    ]
     
-    for i, spike in enumerate(spikes_extracted):
-        channel_loc_x, channel_loc_y = channel_loc_dict.get(spike['channel_index'], ('Unknown', 'Unknown'))  # Handles missing IDs
-        spikes_extracted[i]['channel_location_x'] = channel_loc_x
-        spikes_extracted[i]['channel_location_y'] = channel_loc_y
-
+    # Create a new array with the simplified dtype
+    spikes_extracted = np.empty(len(spikes), dtype=np.dtype(new_dtype))
+    
+    # Map the fields from original spikes array to our simplified array
+    spikes_extracted['sample_index'] = spikes['sample_index']
+    spikes_extracted['channel_index'] = spikes['channel_index']
+    spikes_extracted['unit_index'] = spikes['unit_index']
+    
     return spikes_extracted
 
 
