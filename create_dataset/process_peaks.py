@@ -11,22 +11,37 @@ from tqdm import tqdm
 def filter_peaks(recording, peaks):
     """
     Filters invalid peaks which are not centered between 31 and 33 frames.
+    Keeps only sample_index, channel_index, and amplitude fields, and adds peak_index.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
         peaks (obj): A peaks object returned by SpikeInterface's detect_peaks method.
  
     Returns:
-        obj: A table containing peaks information.
+        obj: A structured numpy array containing filtered peaks information.
     """    
-    peaks = peaks[['sample_index', 'channel_index', 'amplitude']]
+    # Extract only the fields we want to keep
+    fields_to_keep = ['sample_index', 'channel_index', 'amplitude']
     
-    # Create a boolean mask to identify rows within the specified range
+    # Create the mask for filtering
     mask = (peaks['sample_index'] >= 31) & (peaks['sample_index'] <= recording.get_num_frames() - 33)
-
-    peaks_filtered = peaks[mask]    
+    peaks_filtered = peaks[mask]
     
-    return peaks_filtered
+    # Create a new dtype with only our desired fields plus peak_index
+    new_dtype = np.dtype([(field, peaks.dtype[field]) for field in fields_to_keep] + 
+                         [('peak_index', '<i8')])
+    
+    # Create a new array with the new dtype
+    result = np.empty(peaks_filtered.shape, dtype=new_dtype)
+    
+    # Copy only the fields we want to keep
+    for field in fields_to_keep:
+        result[field] = peaks_filtered[field]
+    
+    # Add the peak_index field
+    result['peak_index'] = np.arange(len(result))
+    
+    return result
     
     
 
@@ -106,7 +121,7 @@ def match_peaks(peaks, spikes, channel_locations):
                 least_distance = distance
                 
     # Define a new dtype
-    dt = [('sample_index', '<i8'), ('channel_index', '<i8'), ('amplitude', '<f8')] + [('unit_index', '<i8')]
+    dt = [('sample_index', '<i8'), ('channel_index', '<i8'), ('amplitude', '<f8'), ('peak_index', '<i8')] + [('unit_index', '<i8') ]
     
     # Create a new array with the new dtype
     peaks_matched = np.zeros(peaks.shape, dtype=np.dtype(dt))
