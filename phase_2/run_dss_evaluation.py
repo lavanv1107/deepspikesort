@@ -126,7 +126,7 @@ def main(args):
     if accelerator.is_main_process:
         print("Running DeepSpikeSort...")
         
-    num_epochs = 5
+    num_epochs = 100
     dss.run_deepspikesort(num_epochs)
                         
     # Free up memory 
