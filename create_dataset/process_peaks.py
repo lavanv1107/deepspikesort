@@ -20,29 +20,14 @@ def filter_peaks(recording, peaks):
     Returns:
         obj: A structured numpy array containing filtered peaks information.
     """    
-    # Extract only the fields we want to keep
-    fields_to_keep = ['sample_index', 'channel_index', 'amplitude']
+    peaks = peaks[['sample_index', 'channel_index', 'amplitude']]
     
-    # Create the mask for filtering
+    # Create a boolean mask to identify rows within the specified range
     mask = (peaks['sample_index'] >= 31) & (peaks['sample_index'] <= recording.get_num_frames() - 33)
-    peaks_filtered = peaks[mask]
+
+    peaks_filtered = peaks[mask]    
     
-    # Create a new dtype with only our desired fields plus peak_index
-    new_dtype = np.dtype([(field, peaks.dtype[field]) for field in fields_to_keep] + 
-                         [('peak_index', '<i8')])
-    
-    # Create a new array with the new dtype
-    result = np.empty(peaks_filtered.shape, dtype=new_dtype)
-    
-    # Copy only the fields we want to keep
-    for field in fields_to_keep:
-        result[field] = peaks_filtered[field]
-    
-    # Add the peak_index field
-    result['peak_index'] = np.arange(len(result))
-    
-    return result
-    
+    return peaks_filtered
     
 
 def match_peaks(peaks, spikes, channel_locations):
