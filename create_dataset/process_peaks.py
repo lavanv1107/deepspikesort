@@ -11,7 +11,6 @@ from tqdm import tqdm
 def filter_peaks(recording, peaks):
     """
     Filters invalid peaks which are not centered between 31 and 33 frames.
-    Keeps only sample_index, channel_index, and amplitude fields, and adds peak_index.
  
     Args:
         recording (obj): A RecordingExtractor object created from an NWB file using SpikeInterface.
