@@ -17,7 +17,7 @@ def filter_peaks(recording, peaks):
         peaks (obj): A peaks object returned by SpikeInterface's detect_peaks method.
  
     Returns:
-        obj: A table containing peaks information.
+        obj: A structured numpy array containing filtered peaks information.
     """    
     peaks = peaks[['sample_index', 'channel_index', 'amplitude']]
     
@@ -27,7 +27,6 @@ def filter_peaks(recording, peaks):
     peaks_filtered = peaks[mask]    
     
     return peaks_filtered
-    
     
 
 def match_peaks(peaks, spikes, channel_locations):
