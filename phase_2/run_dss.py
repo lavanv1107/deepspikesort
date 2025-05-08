@@ -40,15 +40,15 @@ def main(args):
     
     peaks_folder = f"../data/{args.recording_id}/peaks"
     
-    channels_file = f"../data/{args.recording_id}/channel_locations.npy"
-    channels = np.load(channels_file)      
+    channel_locations_file = f"../data/{args.recording_id}/channel_locations.npy"
+    channel_locations = np.load(channel_locations_file)      
     
     if accelerator.is_main_process:
         print("Preparing dataset...")
 
     # Create a trace dataset 
     peaks_dataset = load_dataset.TraceDataset(
-        peaks_folder, seed=args.seed, channels=channels, method=args.method
+        dataset_folder=peaks_folder, seed=args.seed, channel_locations=channel_locations, method=args.method
     )
     
     batch_size = 32
@@ -93,7 +93,7 @@ def main(args):
     if accelerator.is_main_process:
         print("Running DeepSpikeSort...")
         
-    num_epochs = 100
+    num_epochs = 25
     dss.run_deepspikesort(num_epochs)
                         
     # Free up memory 
