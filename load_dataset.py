@@ -64,7 +64,7 @@ def select_units(data, num_units='all', min_samples=0, max_samples='max', seed=0
 
 class TraceDataset(Dataset):
     """
-    A PyTorch Dataset class for loading trace data from HDF5 files for training.
+    A PyTorch Dataset class for loading trace data from an HDF5 file for training.
     """
 
     def __init__(self, dataset_folder, shuffle=True, seed=0, channel_locations=None, method=None):
@@ -119,7 +119,7 @@ class TraceDataset(Dataset):
         if self.shuffle:
             properties, trace_inds = self.shuffle_dataset(properties, trace_inds)
 
-        return properties[:100], trace_inds[:100]
+        return properties[:], trace_inds[:]
 
     def shuffle_dataset(self, properties, trace_inds):
         """
@@ -147,9 +147,8 @@ class TraceDataset(Dataset):
 
         # Shuffle properties and trace_inds using the generated indices
         properties = properties[inds_shuffled]
-        trace_inds = [trace_inds[idx_shuffled] for idx_shuffled in inds_shuffled]
         
-        return properties, trace_inds
+        return properties, inds_shuffled
 
     def get_trace(self, trace_idx):
         """
@@ -203,7 +202,7 @@ class TraceDataset(Dataset):
 
 class TraceDatasetEval(Dataset):
     """
-    A PyTorch Dataset class for loading trace data from HDF5 files for evaluation.
+    A PyTorch Dataset class for loading trace data from an HDF5 file for evaluation.
     """
 
     def __init__(self, dataset_folder, dataset_type='unsupervised', unit_inds=None, 
@@ -215,7 +214,7 @@ class TraceDatasetEval(Dataset):
         Parameters
         ----------
         dataset_folder : str
-            The folder path name of the dataset containing HDF5 files.
+            The folder path name of the dataset containing the HDF5 file with the data.
         dataset_type : str, optional
             Type of the dataset to initialize ('supervised' or 'unsupervised'), by default 'unsupervised'.
         unit_inds : list, optional
@@ -329,9 +328,8 @@ class TraceDatasetEval(Dataset):
 
         # Shuffle properties and trace_inds using the generated indices
         properties = properties[inds_shuffled]
-        trace_inds = [trace_inds[idx_shuffled] for idx_shuffled in inds_shuffled]
         
-        return properties, trace_inds
+        return properties, inds_shuffled
 
     def get_trace(self, trace_idx):
         """
@@ -441,11 +439,6 @@ class ClusteredDataset(Dataset):
     """
     A custom PyTorch Dataset class for datasets where each image is assigned
     a cluster label.
-
-    Attributes:
-        dataset_folder (str): The folder path name of the dataset containing HDF5 files.
-        trace_indices (list): List of tuples, each containing unit ID and index within the file.
-        cluster_labels (list): List of cluster labels corresponding to each image.
     """
 
     def __init__(self, dataset_folder, trace_inds, cluster_labels, properties=None, channel_locations=None, method=None):
@@ -453,7 +446,7 @@ class ClusteredDataset(Dataset):
         Initializes the ClusteredDataset instance.
 
         Args:
-            dataset_folder (str): The folder path name of the dataset containing HDF5 files.
+            dataset_folder (str): The folder path name of the dataset containing the HDF5 file with the label.
             trace_indices (list): List of tuples, each containing unit ID and index within the file.
             cluster_labels (list): A list containing cluster labels for each image in the dataset.
         """
