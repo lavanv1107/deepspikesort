@@ -383,9 +383,6 @@ class TraceDatasetEval(Dataset):
         """
         labels = self.get_labels()
         
-        # Import here to avoid potential circular imports
-        from sklearn.preprocessing import LabelEncoder
-        
         label_encoder = LabelEncoder()        
         labels_encoded = np.array(label_encoder.fit_transform(labels), dtype='<i8')
         
