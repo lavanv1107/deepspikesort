@@ -48,8 +48,8 @@ def main(args):
     peaks_file = os.path.join(peaks_folder, "peaks_matched.npy")
     peaks = np.load(peaks_file)          
     
-    channels_file = f"../data/{args.recording_id}/channel_locations.npy"
-    channels = np.load(channels_file)      
+    channel_locations_file = f"../data/{args.recording_id}/channel_locations.npy"
+    channel_locations = np.load(channel_locations_file)      
     
     if accelerator.is_main_process:
         print("Preparing dataset...")
@@ -58,10 +58,11 @@ def main(args):
     units_selected = load_dataset.select_units(peaks, num_units=args.num_units, min_samples=args.min_samples, max_samples=args.max_samples, seed=args.seed)
     
     # Create an unsupervised trace dataset from selected units
-    peaks_dataset = load_dataset.TraceDataset(
-        peaks_folder, 'eval',
-        units_selected, num_samples=args.num_samples, noise_samples=args.noise_samples,
-        channels=channels, method=args.method
+    peaks_dataset = load_dataset.TraceDatasetEval(
+        peaks_folder, 'unsupervised',
+        units_selected, args.num_samples, args.noise_samples,
+        True, args.seed,
+        channel_locations, args.method
     )
     
     num_units = args.num_units
@@ -125,7 +126,7 @@ def main(args):
     if accelerator.is_main_process:
         print("Running DeepSpikeSort...")
         
-    num_epochs = 100
+    num_epochs = 5
     dss.run_deepspikesort(num_epochs)
                         
     # Free up memory 
