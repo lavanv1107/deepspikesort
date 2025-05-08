@@ -119,7 +119,7 @@ class TraceDataset(Dataset):
         if self.shuffle:
             properties, trace_inds = self.shuffle_dataset(properties, trace_inds)
 
-        return properties[:], trace_inds[:]
+        return properties, trace_inds
 
     def shuffle_dataset(self, properties, trace_inds):
         """
