@@ -74,7 +74,7 @@ class TraceDataset(Dataset):
         Parameters
         ----------
         dataset_folder : str
-            The folder path name of the dataset containing HDF5 files.
+            The folder path name containing the `peaks.h5` file with the data.
         shuffle : bool, optional
             Whether to shuffle the dataset, by default True.
         seed : int, optional
