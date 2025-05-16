@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler, normalize
 
-from cuml import KMeans
+# from cuml import KMeans
 # from pycave.bayes import GaussianMixture
 from sklearn.mixture import GaussianMixture
 
@@ -23,9 +23,9 @@ import matplotlib.pyplot as plt
 
 import spikeinterface.full as si
 
-from . import comparison
+import comparison
 sys.path.append("..")
-from data import load_dataset
+import load_dataset
 from util import AverageMeter, calculate_elapsed_time, print_epoch_header
 
 
@@ -280,7 +280,7 @@ class DeepSpikeSortPipeline():
             self.dataset.trace_inds, 
             cluster_labels,
             self.dataset.properties, 
-            self.dataset.channels, 
+            self.dataset.channel_locations, 
             self.dataset.method
         )
 
@@ -476,7 +476,6 @@ class DeepSpikeSortPipeline():
                 # Synchronize before next epoch
                 self.accelerator.wait_for_everyone()
 
-            # If ctrl-C is pressed, break the loop and close the output data handler
             except KeyboardInterrupt:
                 break
 
