@@ -1,0 +1,106 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deepspikesort"
+dynamic = ["version"]
+description = "Deep learning-based spike sorting pipeline for neuroscience data"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Vatanak Lavan"},
+    {name = "Ryan Ly"},
+]
+keywords = [
+    "neuroscience",
+    "spike-sorting",
+    "deep-learning",
+    "pytorch",
+    "electrophysiology",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "torch",
+    "torchvision",
+    "scikit-learn",
+    "h5py",
+    "matplotlib",
+    "accelerate",
+    "tqdm",
+    "one-api",
+    "spikeinterface[full]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "isort",
+    "ruff",
+    "mypy",
+]
+jupyter = [
+    "jupyter",
+    "ipykernel",
+    "notebook",
+]
+
+[project.urls]
+Homepage = "https://github.com/lavanv1107/deepspikesort"
+Documentation = "https://github.com/lavanv1107/deepspikesort#readme"
+Repository = "https://github.com/lavanv1107/deepspikesort.git"
+Issues = "https://github.com/lavanv1107/deepspikesort/issues"
+
+[tool.hatch.version]
+path = "src/deepspikesort/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deepspikesort"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/README.md",
+    "/pyproject.toml",
+]
+
+[tool.black]
+line-length = 120
+target-version = ['py313']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
