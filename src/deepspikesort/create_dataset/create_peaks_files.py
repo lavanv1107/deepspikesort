@@ -6,7 +6,7 @@ import h5py
 
 import spikeinterface.full as si
 
-from ..preprocessing import get_trace_reshaped
+from deepspikesort.preprocessing import get_trace_reshaped
 
 
 def parse_args():

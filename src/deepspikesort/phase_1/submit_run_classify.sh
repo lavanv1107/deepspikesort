@@ -4,7 +4,7 @@
 #SBATCH -G 8
 #SBATCH -q regular
 #SBATCH -J run_classify
-#SBATCH --mail-user=vatanaklavan@proton.me
+#SBATCH --mail-user=rly@lbl.gov
 #SBATCH --mail-type=ALL
 #SBATCH -t 10:00:00
 #SBATCH -A m3513

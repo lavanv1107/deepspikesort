@@ -2,24 +2,22 @@
 #SBATCH -N 1
 #SBATCH -C cpu
 #SBATCH -q regular
-#SBATCH -J create_dataset
-#SBATCH --mail-user=  # Customize the email address to send notifications
+#SBATCH -J dss_create_cshl049_dataset
+#SBATCH --mail-user=rly@lbl.gov  # Customize the email address to send notifications
 #SBATCH --mail-type=ALL
 #SBATCH -t 1:00:00
-#SBATCH -o /path/to/create_dataset.out
-#SBATCH -e /path/to/create_dataset.err 
+#SBATCH -A m3513  # Set the project ID
+#SBATCH -o /pscratch/sd/r/rly/deepspikesort/out/create_dataset.out  # Customize the output log locations
+#SBATCH -e /pscratch/sd/r/rly/deepspikesort/out/create_dataset.err 
 #SBATCH -n 16  # <-- Customize the number of tasks to run
 #SBATCH -c 16
 
 # Change to the main directory
-cd /path/to/main_folder
+cd /pscratch/sd/r/rly/deepspikesort
 
-# Set PYTHONPATH to include the main folder
-export PYTHONPATH=$PYTHONPATH:/path/to/main_folder
-
+# Load a conda (or other) environment where deepspikesort is installed
 module load conda
-conda activate environment_name
+conda activate /global/common/software/m3513/deepspikesort2
 
-# For example, if your data is in `[project root]/data/sub-CSHL049/`, then change the below command to:
-# srun -u python -m create_dataset.create_peaks_files sub-CSHL049
-srun -u python -m create_dataset.create_peaks_files sub-CSHL049
+# Run create_peaks_files.py
+srun -u python src/deepspikesort/create_dataset/create_peaks_files.py sub-CSHL049

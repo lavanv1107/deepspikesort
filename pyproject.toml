@@ -45,7 +45,6 @@ dependencies = [
     "matplotlib",
     "accelerate",
     "tqdm",
-    "one-api",
     "spikeinterface[full]",
 ]
 
