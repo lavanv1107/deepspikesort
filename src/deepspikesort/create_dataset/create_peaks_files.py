@@ -23,7 +23,7 @@ def main(args):
     # Load input data
     data_folder = f'data/{args.recording_id}'
 
-    recording = si.load_extractor(os.path.join(data_folder, "extractors/preprocessed"))
+    recording = si.load(os.path.join(data_folder, "extractors/preprocessed"))
     peaks = np.load(os.path.join(data_folder, "peaks/peaks.npy"))
 
     # Calculate chunk for this process
