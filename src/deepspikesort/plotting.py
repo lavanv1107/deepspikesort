@@ -89,7 +89,7 @@ def plot_trace_image(recording, sample_frame, columns):
         plt.ylabel('channel index')
 
         # Add colorbar for the plot
-        cb = plt.colorbar(orientation='vertical')
+        plt.colorbar(orientation='vertical')
 
         plt.tight_layout()
         plt.show()
@@ -110,7 +110,7 @@ def plot_trace_image(recording, sample_frame, columns):
         plt.text(0.01, 0.5, 'channel index', ha='center', va='center', rotation='vertical', transform=plt.gcf().transFigure)
         # Add colorbar for the plot
         cax = plt.axes([0.15, 0.95, 0.7, 0.03])  # [left, bottom, width, height]
-        cb = plt.colorbar(cax=cax, orientation='horizontal')
+        plt.colorbar(cax=cax, orientation='horizontal')
 
         plt.show()
 

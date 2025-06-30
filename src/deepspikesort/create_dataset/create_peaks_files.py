@@ -1,13 +1,10 @@
 import argparse
 import os
-import warnings
 
 import numpy as np
 import h5py
 
 import spikeinterface.full as si
-
-warnings.simplefilter("ignore")
 
 from ..preprocessing import get_trace_reshaped
 

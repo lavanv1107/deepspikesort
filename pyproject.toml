@@ -7,7 +7,7 @@ name = "deepspikesort"
 dynamic = ["version"]
 description = "Deep learning-based spike sorting pipeline for neuroscience data"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "Vatanak Lavan"},

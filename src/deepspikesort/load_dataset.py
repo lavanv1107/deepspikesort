@@ -1,6 +1,5 @@
 import os
 import sys
-import random
 
 import numpy as np
 import h5py
@@ -108,7 +107,7 @@ class TraceDataset(Dataset):
         properties = []
         trace_inds = []
 
-        file = os.path.join(self.dataset_folder, f"peaks.h5")
+        file = os.path.join(self.dataset_folder, "peaks.h5")
 
         with h5py.File(file, 'r') as handle:
             trace_inds = range(handle['traces'].shape[0])
@@ -163,7 +162,7 @@ class TraceDataset(Dataset):
         torch.Tensor
             The trace data as a tensor.
         """
-        file = os.path.join(self.dataset_folder, f"peaks.h5")
+        file = os.path.join(self.dataset_folder, "peaks.h5")
         with h5py.File(file, 'r') as handle:
             trace = torch.from_numpy(handle['traces'][trace_idx])
 
@@ -266,9 +265,9 @@ class TraceDatasetEval(Dataset):
         properties = []
         trace_inds = []
 
-        file = os.path.join(self.dataset_folder, f"peaks.h5")
+        file = os.path.join(self.dataset_folder, "peaks.h5")
 
-        peaks_matched = np.load(os.path.join(self.dataset_folder, f"peaks_matched.npy"))
+        peaks_matched = np.load(os.path.join(self.dataset_folder, "peaks_matched.npy"))
 
         with h5py.File(file, 'r') as handle:
             for unit_idx in self.unit_inds:
@@ -344,7 +343,7 @@ class TraceDatasetEval(Dataset):
         torch.Tensor
             The trace data as a tensor.
         """
-        file = os.path.join(self.dataset_folder, f"peaks.h5")
+        file = os.path.join(self.dataset_folder, "peaks.h5")
         with h5py.File(file, 'r') as handle:
             trace = torch.from_numpy(handle['traces'][trace_idx])
 
@@ -361,7 +360,7 @@ class TraceDatasetEval(Dataset):
             An array containing labels for each trace in the dataset.
         """
         # Load the peaks_matched array and extract labels
-        peaks_matched = np.load(os.path.join(self.dataset_folder, f"peaks_matched.npy"))
+        peaks_matched = np.load(os.path.join(self.dataset_folder, "peaks_matched.npy"))
         labels = np.array([peaks_matched['unit_index'][i] for i in self.trace_inds], dtype='<i8')
         return labels
 
@@ -466,7 +465,7 @@ class ClusteredDataset(Dataset):
         Returns:
             torch.Tensor: The trace data as a tensor.
         """
-        file = os.path.join(self.dataset_folder, f"peaks.h5")
+        file = os.path.join(self.dataset_folder, "peaks.h5")
         with h5py.File(file, 'r') as handle:
             trace = torch.from_numpy(handle['traces'][trace_idx])
 

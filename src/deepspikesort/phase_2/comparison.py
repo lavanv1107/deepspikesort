@@ -1,11 +1,8 @@
+import logging
 import os
-import sys
 
 import numpy as np
-
 import spikeinterface.full as si
-
-import logging
 
 from .. import util
 

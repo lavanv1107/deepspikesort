@@ -56,14 +56,13 @@ def get_channel_ind_reshaped(channel_ind):
         return channel_ind // 2, 1
 
 
-def extract_spikes(sorting, analyzer, channels):
+def extract_spikes(sorting, analyzer):
     """
     Creates a simplified array of spike events with only sample_index, channel_index, and unit_index.
 
     Args:
         sorting (obj): A SortingExtractor object created from an NWB file using SpikeInterface.
         analyzer (obj): Analyzer object containing template information.
-        channels (obj): Array containing channel information.
 
     Returns:
         obj: A numpy array of spike events with minimal required fields.
