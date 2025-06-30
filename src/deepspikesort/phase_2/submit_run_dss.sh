@@ -3,12 +3,12 @@
 #SBATCH -G 20
 #SBATCH -q regular
 #SBATCH -J run_dss
-#SBATCH --mail-user=vatanaklavan@proton.me
+#SBATCH --mail-user=rly@lbl.gov
 #SBATCH --mail-type=ALL
 #SBATCH -t 5:00:00
 #SBATCH -A m3513
-#SBATCH -o /pscratch/sd/v/vlavan/deep_spike_sort/phase_2/run_dss.out
-#SBATCH -e /pscratch/sd/v/vlavan/deep_spike_sort/phase_2/run_dss.err 
+#SBATCH -o /pscratch/sd/r/rly/deep_spike_sort/phase_2/run_dss.out
+#SBATCH -e /pscratch/sd/r/rly/deep_spike_sort/phase_2/run_dss.err 
 #SBATCH -n 16
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=32
