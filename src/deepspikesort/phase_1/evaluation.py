@@ -19,7 +19,7 @@ class TestModel():
         self.test_dataset = test_dataset
         self.device = device
         self.model = model
-    
+
     def get_image_index_by_class(self, target_class):
         """
         Loads a checkpoint for a model from a previous training.
@@ -35,7 +35,7 @@ class TestModel():
             return random.choice(class_indices)  # Return the index of an image in the specified class
         else:
             return None  # Return None if no image of the specified class is found
-    
+
     def get_confidence_probabilities(self, class_names, target_class):
         """
         This prints the model's confidence for the class an image actually belongs to as well as the class it believes the image belongs to.
@@ -66,7 +66,7 @@ class TestModel():
         plt.ylabel('Probability')
         plt.title('Class Probabilities')
         plt.xticks(rotation=90, fontsize=8)
-        plt.ylim(0, 1.05) 
+        plt.ylim(0, 1.05)
 
         # Add text annotations for probability values above the bars
         for bar, prob in zip(bars, probabilities):
@@ -74,8 +74,8 @@ class TestModel():
 
         plt.tight_layout()
         plt.show()
-    
-    
+
+
 class VisualizeModel():
     """
     A PyTorch-based class for visualizing the filters of a model.
@@ -87,7 +87,7 @@ class VisualizeModel():
         """
         self.model = model
         self.model_layers, self.model_weights = self.extract_layers_weights()
-        
+
     def extract_layers_weights(self):
         """
         Extracts information about the convolutional layers in a model as well as their weights.
@@ -104,7 +104,7 @@ class VisualizeModel():
 
         # Append all the conv layers and their respective weights to the list
         for i in range(len(model_children)):
-            if type(model_children[i]) == nn.Conv3d or type(model_children[i]) == nn.Conv2d:
+            if isinstance(model_children[i], (nn.Conv3d, nn.Conv2d)):
                 model_weights.append(model_children[i].weight)
                 model_layers.append(model_children[i])
 
@@ -124,7 +124,7 @@ class VisualizeModel():
         This plots the filter for a convolutional layer in a model.
         The number of where the convolutional layer is located in the model has to be specified.
         This will be able to plot the filter for either a 3D or 2D convolutional layer.
-        
+
         Args:
             layer_num (int): The number of a convolutional layer in a model.
             layer_shape (str): The shape of a convolutional layer in a model.

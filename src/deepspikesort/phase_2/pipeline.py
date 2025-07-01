@@ -1,15 +1,12 @@
 import datetime
 import logging
 import os
-import sys
 import time
 
 import numpy as np
 import h5py
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from sklearn.decomposition import PCA
@@ -23,10 +20,9 @@ import matplotlib.pyplot as plt
 
 import spikeinterface.full as si
 
-import comparison
-sys.path.append("..")
-import load_dataset
-from util import AverageMeter, calculate_elapsed_time, print_epoch_header
+from . import comparison
+from .. import load_dataset
+from ..util import AverageMeter, calculate_elapsed_time, print_epoch_header
 
 
 class DeepSpikeSortPipeline():
@@ -51,20 +47,20 @@ class DeepSpikeSortPipeline():
         """
         self.dataset = dataset
         self.batch_size = batch_size
-        
+
         self.cnn = cnn
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.accelerator = accelerator
-        
+
         self.num_units = num_units
-        
+
         self.output_folder = output_folder
         self.session_id = session_id
 
         self.verbose_count = verbose_count
-        
-        
+
+
     def extract_features(self):
         """
         Extract features from the dataset.
@@ -76,7 +72,7 @@ class DeepSpikeSortPipeline():
         """
         # Prepare model and dataloader
         dataloader = DataLoader(
-            self.dataset, 
+            self.dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=4,
@@ -113,7 +109,7 @@ class DeepSpikeSortPipeline():
 
         if self.accelerator.is_main_process:
             print("- Extraction")
-            print("Extracting features...")  
+            print("Extracting features...")
 
         extract_end = time.time()
         batch_end = time.time()
@@ -181,9 +177,9 @@ class DeepSpikeSortPipeline():
             Array of preprocessed features.
         """
         # Dimensionality reduction
-        features_pca = PCA(n_components=50).fit_transform(features)         
-                
-        # Add locations x and y of peak channel 
+        features_pca = PCA(n_components=50).fit_transform(features)
+
+        # Add locations x and y of peak channel
         # if self.dataset.method == "slice":
         #     features_sliced = np.hstack((features_reduced, self.dataset.waveform_locs))
 
@@ -194,8 +190,8 @@ class DeepSpikeSortPipeline():
         features_normalized = normalize(features_whitened, norm="l2", axis=1)
 
         return features_normalized
-    
-    
+
+
     def cluster_features(self, features):
         """
         Cluster preprocessed features using Gaussian Mixture Model.
@@ -214,15 +210,15 @@ class DeepSpikeSortPipeline():
         cluster_time = time.time()
 
         labels = GaussianMixture(
-            n_components=self.num_units, 
+            n_components=self.num_units,
             random_state=0
         ).fit_predict(features)
 
         print(f"\nClustering time: {time.time() - cluster_time:.3f}\n")
 
         return labels
-    
-    
+
+
     def relabel_clusters(self, previous_sorting, current_sorting, cluster_labels):
         """Maintains consistent cluster labeling between epochs."""
         # Compare the two sortings
@@ -258,7 +254,7 @@ class DeepSpikeSortPipeline():
         new_labels = np.array([label_map[label] for label in cluster_labels], dtype=int)
 
         return new_labels
-        
+
 
     def train_cnn(self, cluster_labels):
         """
@@ -273,14 +269,14 @@ class DeepSpikeSortPipeline():
         -------
         float
             The average loss over the training dataset.
-        """       
+        """
         # Create dataset with pseudo-labels
         dataset = load_dataset.ClusteredDataset(
-            self.dataset.dataset_folder, 
-            self.dataset.trace_inds, 
+            self.dataset.dataset_folder,
+            self.dataset.trace_inds,
             cluster_labels,
-            self.dataset.properties, 
-            self.dataset.channel_locations, 
+            self.dataset.properties,
+            self.dataset.channel_locations,
             self.dataset.method
         )
 
@@ -290,7 +286,7 @@ class DeepSpikeSortPipeline():
         local_batch_size = max(1, local_batch_size)  # Ensure at least 1
 
         dataloader = DataLoader(
-            dataset, 
+            dataset,
             batch_size=local_batch_size,
             num_workers=4,
             pin_memory=True
@@ -299,7 +295,7 @@ class DeepSpikeSortPipeline():
         # Prepare model, optimizer and dataloader
         self.cnn, self.optimizer, dataloader = self.accelerator.prepare(
             self.cnn, self.optimizer, dataloader
-        )        
+        )
         self.cnn.train()
 
         self.accelerator.wait_for_everyone()
@@ -323,16 +319,16 @@ class DeepSpikeSortPipeline():
         data_time_meter = AverageMeter()
 
         # Setup logging
-        batches_count = len(dataloader) 
-        verbose_interval = max(1, batches_count // self.verbose_count) 
-        padding = len(str(batches_count)) 
+        batches_count = len(dataloader)
+        verbose_interval = max(1, batches_count // self.verbose_count)
+        padding = len(str(batches_count))
 
         if self.accelerator.is_main_process:
             print("- Training")
             print(f"Training CNN (global batch size: {self.batch_size}, local batch size: {local_batch_size})...")
 
         train_end = time.time()
-        batch_end = time.time() 
+        batch_end = time.time()
 
         for batch, (X, Y) in enumerate(dataloader):
             data_time_meter.update(calculate_elapsed_time(batch_end))
@@ -350,7 +346,7 @@ class DeepSpikeSortPipeline():
             # Loss computation
             Y = Y.long()
             loss = self.loss_fn(outputs, Y)
-            loss_meter.update(loss.item(), X.shape[0])            
+            loss_meter.update(loss.item(), X.shape[0])
 
             # Accuracy computation
             correct_preds = (preds == Y).sum().item()
@@ -361,7 +357,7 @@ class DeepSpikeSortPipeline():
             self.optimizer.step()
 
             batch_time_meter.update(calculate_elapsed_time(batch_end))
-            batch_end = time.time() 
+            batch_end = time.time()
 
             # Logging
             if batch % verbose_interval == 0 and self.accelerator.is_main_process:
@@ -370,8 +366,8 @@ class DeepSpikeSortPipeline():
                 print(f"{datetime_formatted} - [{batch_formatted}/{len(dataloader)}]\t"
                       f"Time: {batch_time_meter.val:.3f} ({batch_time_meter.avg:.3f})\t"
                       f"Data: {data_time_meter.val:.3f} ({data_time_meter.avg:.3f})\t"
-                      f"Loss: {loss_meter.val:.4f} ({loss_meter.avg:.4f})\t" 
-                      f"Accuracy: {accuracy_meter.val:.4f} ({accuracy_meter.avg:.4f})")   
+                      f"Loss: {loss_meter.val:.4f} ({loss_meter.avg:.4f})\t"
+                      f"Accuracy: {accuracy_meter.val:.4f} ({accuracy_meter.avg:.4f})")
 
         self.accelerator.wait_for_everyone()
 
@@ -390,8 +386,8 @@ class DeepSpikeSortPipeline():
             return labels_predicted, loss_avg.item(), accuracy_avg.item()
         else:
             return None, None, None
-        
-    
+
+
     def run_deepspikesort(self, num_epochs):
         # Initialize handlers and loggers
         output_data_handler = None
@@ -420,7 +416,7 @@ class DeepSpikeSortPipeline():
                     # Step 1: Feature Extraction (already distributed)
                     features = self.extract_features()
 
-                    # Step 2: Clustering 
+                    # Step 2: Clustering
                     if self.accelerator.is_main_process:
                         # Perform clustering
                         cluster_labels = self.cluster_features(features)
@@ -428,21 +424,21 @@ class DeepSpikeSortPipeline():
                         # Handle cluster relabeling if not first epoch
                         if epoch != 0:
                             current_sorting = comparison.create_numpy_sorting(
-                                self.dataset.properties["sample_index"], 
-                                cluster_labels, 
+                                self.dataset.properties["sample_index"],
+                                cluster_labels,
                                 30000
                             )
                             cluster_labels = self.relabel_clusters(
-                                previous_sorting, 
-                                current_sorting, 
+                                previous_sorting,
+                                current_sorting,
                                 cluster_labels
                             )
 
                         # Update previous data
                         previous_cluster_labels = cluster_labels
                         previous_sorting = comparison.create_numpy_sorting(
-                            self.dataset.properties["sample_index"], 
-                            previous_cluster_labels, 
+                            self.dataset.properties["sample_index"],
+                            previous_cluster_labels,
                             30000
                         )
 
@@ -455,21 +451,21 @@ class DeepSpikeSortPipeline():
                 # Handle metrics and logging
                 if self.accelerator.is_main_process:
                     performance_metrics = np.array(
-                        (loss, accuracy), 
+                        (loss, accuracy),
                         dtype=output_data_handler["metrics"].dtype
                     )
 
                     # Log and save data
                     self.log_performance_metrics(
-                        performance_metrics_logger, 
-                        epoch, 
+                        performance_metrics_logger,
+                        epoch,
                         performance_metrics
                     )
                     self.save_output_data(
-                        output_data_handler, 
-                        epoch, 
-                        features, 
-                        labels_predicted, 
+                        output_data_handler,
+                        epoch,
+                        features,
+                        labels_predicted,
                         performance_metrics
                     )
 
@@ -488,7 +484,7 @@ class DeepSpikeSortPipeline():
         # Final synchronization
         self.accelerator.wait_for_everyone()
 
-            
+
     def setup_output_data_handler(self, num_epochs):
         """
         Sets up an HDF5 file to store DeepSpikeSort output data.
@@ -505,19 +501,19 @@ class DeepSpikeSortPipeline():
         """
         file = os.path.join(self.output_folder, f"{self.session_id}_output_data.h5")
         handler = h5py.File(file, "w")
-        
+
         handler.create_dataset("properties", data=self.dataset.properties)
-        
+
         handler.create_dataset("features", shape=(num_epochs, len(self.dataset), 50), dtype="<f8")
         handler.create_dataset("labels", shape=(num_epochs, len(self.dataset)), dtype="<i8")
-        
+
         handler.create_dataset("metrics", shape=(num_epochs,),
                                dtype=np.dtype([("loss", "<f8"),
-                                               ("accuracy", "<f8")]))        
-        
+                                               ("accuracy", "<f8")]))
+
         return handler
-    
-    
+
+
     def save_output_data(self, handler, epoch, features, labels, metrics):
         """
         Saves DeepSpikeSort output data to an HDF5 file.
@@ -537,8 +533,8 @@ class DeepSpikeSortPipeline():
         handler["features"][epoch, :, :] = features
         handler["labels"][epoch, :] = labels
         handler["metrics"][epoch] = metrics
-        
-    
+
+
     def setup_performance_metrics_logger(self):
         """
         Sets up a logger to record DeepSpikeSort performance metrics.
@@ -547,9 +543,9 @@ class DeepSpikeSortPipeline():
         -------
         logging.Logger
             A logger object to record performance metrics.
-        """       
-        file = os.path.join(self.output_folder, f"{self.session_id}_performance_metrics.log")   
-        
+        """
+        file = os.path.join(self.output_folder, f"{self.session_id}_performance_metrics.log")
+
         # Initialize a logger
         logger = logging.getLogger("performance_metrics_logger")
         logger.setLevel(logging.INFO)
@@ -563,27 +559,27 @@ class DeepSpikeSortPipeline():
 
         # Add the file handler to the logger
         logger.addHandler(handler)
-        
+
         return logger
 
 
-    def log_performance_metrics(self, logger, epoch, metrics):       
+    def log_performance_metrics(self, logger, epoch, metrics):
         """
         Logs DeepSpikeSort performance metrics to a log file.
 
         Parameters
-        ----------        
+        ----------
         epoch : int
             The epoch number.
         """
         logger.info("[{0:03}]\t"
                     "Loss: {1:.4f}\t"
                     "Accuracy: {2:.4f}"
-                    .format(epoch, 
+                    .format(epoch,
                             metrics["loss"],
                             metrics["accuracy"]))
-        
-        
+
+
     def plot_performance_metrics(self, handle):
         """
         Plots DeepSpikeSort performance metrics.
@@ -594,9 +590,9 @@ class DeepSpikeSortPipeline():
             List where each np.array contains values for loss, silhouette score, Davies-Bouldin index, and Calinski-Harabasz index for each epoch.
         """
         metrics = handle["metrics"][:]
-        
+
         epochs = range(metrics.shape[0])
-        
+
         plt.figure(figsize=(10, 10))
 
         # loss
@@ -608,8 +604,8 @@ class DeepSpikeSortPipeline():
         plt.subplot(2, 1, 2)
         plt.plot(epochs, metrics["accuracy"], "g", label="Accuracy")
         plt.title("Accuracy")
-        
+
         plt.figtext(0.5, 0.04, "Epochs", ha="center", va="center", fontsize=11)
 
-        plt.tight_layout(rect=[0, 0.04, 1, 1])  
+        plt.tight_layout(rect=[0, 0.04, 1, 1])
         plt.savefig(os.path.join(self.output_folder, f"{self.session_id}_performance_metrics.png"))

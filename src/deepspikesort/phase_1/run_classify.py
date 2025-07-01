@@ -1,6 +1,5 @@
 import argparse
 import os
-import sys
 import warnings
 
 import numpy as np
@@ -12,9 +11,8 @@ from accelerate import Accelerator
 
 from .classify import ClassifyPipeline
 
-sys.path.append("..")
-from data import load_dataset
-from models import model
+from .. import load_dataset
+from ..models import model
 
 warnings.simplefilter("ignore")
 
@@ -33,63 +31,63 @@ def parse_args():
     parser.add_argument('session_number', type=int, help='Number of the training session')
 
     return parser.parse_args()
-    
-    
+
+
 def main(args):
     # Load spikes data from file
     spikes_folder = f'data/{args.recording_id}/spikes'
     spikes_file = os.path.join(spikes_folder, "spikes.npy")
-    spikes = np.load(spikes_file)  
+    spikes = np.load(spikes_file)
 
     # Select units based on the parameters
     selected_units = load_dataset.select_units(spikes, min_samples=args.min_samples, max_samples=args.max_samples, num_units=args.num_units)
-    
+
     #
     channels_file = f'data/{args.recording_id}/channels.npy'
     channels = np.load(channels_file)
-    
+
     # Create a supervised trace dataset from selected units
     spikes_dataset = load_dataset.TraceDataset(
-        spikes_folder, 'supervised', 
-        selected_units, num_samples=args.num_samples, noise_samples=args.noise_samples, 
+        spikes_folder, 'supervised',
+        selected_units, num_samples=args.num_samples, noise_samples=args.noise_samples,
         data=spikes, channels=channels, method='mask'
     )
-    
+
      # Define the CNN model
     cnn = model.DeepSpikeSort(len(selected_units))
-    
+
     # Specify loss function and optimizer
-    loss_fn = nn.CrossEntropyLoss()    
-    optimizer = torch.optim.Adam(cnn.parameters(), lr=0.0001)    
-    
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(cnn.parameters(), lr=0.0001)
+
     # Initialize the Hugging Face Accelerator
     accelerator = Accelerator()
 
-    # Create a directory for output 
+    # Create a directory for output
     output_folder = f'phase_1/output/{args.recording_id}'
     os.makedirs(output_folder, exist_ok=True)
-    
+
     # Run classification
     session_id = f'{args.session_name.upper()}_{args.session_number:03}' # Set an ID for the training session
     classify_pipeline = ClassifyPipeline(spikes_dataset, cnn, loss_fn, optimizer, accelerator, output_folder, session_id)
-    
+
     if accelerator.is_main_process:
         print("Running Classification...")
-        
+
     classify_pipeline.train_validate(100)
 
     # Free up memory by deleting the model and clearing CUDA cache
     del cnn
     torch.cuda.empty_cache()
-    
+
 
 def determine_count(value):
     if value == 'max' or value=='all':
         return value
     else:
         return int(value)
-    
-    
-if __name__ == "__main__":        
+
+
+if __name__ == "__main__":
     args = parse_args()
     main(args)
