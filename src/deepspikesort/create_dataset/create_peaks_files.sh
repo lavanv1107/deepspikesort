@@ -7,8 +7,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH -t 1:00:00
 #SBATCH -A m3513  # Set the project ID
-#SBATCH -o /pscratch/sd/r/rly/deepspikesort/out/create_dataset.out  # Customize the output log locations
-#SBATCH -e /pscratch/sd/r/rly/deepspikesort/out/create_dataset.err 
+#SBATCH -o /pscratch/sd/r/rly/deepspikesort/out/dss_create_cshl049_dataset.out  # Customize the output log locations
+#SBATCH -e /pscratch/sd/r/rly/deepspikesort/out/dss_create_cshl049_dataset.err 
 #SBATCH -n 16  # <-- Customize the number of tasks to run
 #SBATCH -c 16
 
